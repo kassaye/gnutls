@@ -35,6 +35,8 @@ doc/dane-api.texi
 doc/algorithms.texi
 doc/compat-api.texi
 doc/core.c.texi
+doc/invoke-certtool.texi
+doc/invoke-p11tool.texi
 doc/coverage/
 doc/credentials/Makefile
 doc/credentials/Makefile.in
@@ -622,4 +624,6 @@ gl/tests/test-setlocale1
 gl/tests/test-setlocale2
 gl/tests/test-u8-mbtoucr
 gl/tests/test-u8-uctomb
+gl/byteswap.h
+gl/stdint.h
 tmp-compare-makefile
