@@ -965,6 +965,7 @@ _gnutls_recv_in_buffers (gnutls_session_t session, content_type_t type,
   uint64 *packet_sequence;
   uint8_t *ciphertext;
   mbuffer_st* bufel = NULL, *decrypted = NULL;
+  gnutls_datum_t t;
   int ret;
   int empty_packet = 0;
   record_parameters_st *record_params;
@@ -1049,9 +1050,10 @@ begin:
 
   /* decrypt the data we got. 
    */
+  t.data = _mbuffer_get_udata_ptr(decrypted);
+  t.size = _mbuffer_get_udata_size(decrypted);
   ret =
-    _gnutls_decrypt (session, ciphertext, record.length, 
-        _mbuffer_get_udata_ptr(decrypted), _mbuffer_get_udata_size(decrypted),
+    _gnutls_decrypt (session, ciphertext, record.length, &t,
 		     record.type, record_params, packet_sequence);
   if (ret >= 0) _mbuffer_set_udata_size(decrypted, ret);
 
