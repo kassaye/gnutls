@@ -627,3 +627,5 @@ gl/tests/test-u8-uctomb
 gl/byteswap.h
 gl/stdint.h
 tmp-compare-makefile
+tests/mini-dtls-record
+tests/mini-x509-rehandshake
