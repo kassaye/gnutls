@@ -233,6 +233,17 @@ int gnutls_x509_crt_get_authority_info_access(gnutls_x509_crt_t
 					      data, unsigned int
 					      *critical);
 
+typedef struct gnutls_name_constraints_st *gnutls_x509_name_constraints_t;
+
+int gnutls_x509_crt_get_name_constraints(gnutls_x509_crt_t crt,
+			gnutls_x509_name_constraints_t* nc,
+			unsigned int *critical);
+void gnutls_x509_name_constraints_release(gnutls_x509_name_constraints_t nc);
+int gnutls_x509_name_constraints_get_excluded(gnutls_x509_name_constraints_t nc, unsigned idx,
+		unsigned * type, gnutls_datum_t * name);
+int gnutls_x509_name_constraints_get_permitted(gnutls_x509_name_constraints_t nc, unsigned idx,
+		unsigned * type, gnutls_datum_t * name);
+
 #define GNUTLS_CRL_REASON_SUPERSEEDED GNUTLS_CRL_REASON_SUPERSEDED,
   /**
    * gnutls_x509_crl_reason_flags_t:

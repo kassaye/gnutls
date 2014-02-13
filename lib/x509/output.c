@@ -158,6 +158,64 @@ static void print_proxy(gnutls_buffer_st * str, gnutls_x509_crt_t cert)
 	}
 }
 
+static void print_nc(gnutls_buffer_st * str, const char* prefix, gnutls_x509_crt_t cert)
+{
+	gnutls_x509_name_constraints_t nc;
+	int ret;
+	unsigned critical, idx = 0;
+	gnutls_datum_t name;
+	unsigned type;
+
+	ret = gnutls_x509_crt_get_name_constraints(cert, &nc, &critical);
+	if (ret < 0)
+		return;
+
+	do {
+		ret = gnutls_x509_name_constraints_get_permitted(nc, idx++, &type, &name);
+
+		if (ret >= 0) {
+			if (idx == 1)
+				addf(str,  _("%s\t\t\tPermitted:\n"), prefix);
+
+			if (type == GNUTLS_SAN_DNSNAME) {
+				addf(str,  _("%s\t\t\tDNSname:%s\n"), prefix, name.data);
+			} else if (type == GNUTLS_SAN_RFC822NAME) {
+				addf(str,  _("%s\t\t\tRFC822Name:%s\n"), prefix, name.data);
+			} else if (type == GNUTLS_SAN_URI) {
+				addf(str,  _("%s\t\t\tURI:%s\n"), prefix, name.data);
+			} else if (type == GNUTLS_SAN_DN) {
+				addf(str,  _("%s\t\t\tdirectoryName:"), prefix);
+				_gnutls_buffer_hexprint(str, name.data, name.size);
+				adds(str,  _(" \n"));
+			}
+		}
+	} while (ret == 0);
+
+	idx = 0;
+	do {
+		ret = gnutls_x509_name_constraints_get_excluded(nc, idx++, &type, &name);
+
+		if (ret >= 0) {
+			if (idx == 1)
+				addf(str,  _("%s\t\t\tExcluded:\n"), prefix);
+
+			if (type == GNUTLS_SAN_DNSNAME) {
+				addf(str,  _("%s\t\t\tDNSname:%s\n"), prefix, name.data);
+			} else if (type == GNUTLS_SAN_RFC822NAME) {
+				addf(str,  _("%s\t\t\tRFC822Name:%s\n"), prefix, name.data);
+			} else if (type == GNUTLS_SAN_URI) {
+				addf(str,  _("%s\t\t\tURI:%s\n"), prefix, name.data);
+			} else if (type == GNUTLS_SAN_DN) {
+				addf(str,  _("%s\t\t\tdirectoryName:"), prefix);
+				_gnutls_buffer_hexprint(str, name.data, name.size);
+				adds(str,  _(" \n"));
+			}
+		}
+	} while (ret == 0);
+	
+	gnutls_x509_name_constraints_release(nc);
+}
+
 static void print_aia(gnutls_buffer_st * str, gnutls_x509_crt_t cert)
 {
 	int err;
@@ -982,7 +1040,7 @@ print_extensions(gnutls_buffer_st * str, const char *prefix, int type,
 	int keyusage_idx = 0;
 	int keypurpose_idx = 0;
 	int ski_idx = 0;
-	int aki_idx = 0;
+	int aki_idx = 0, nc_idx = 0;
 	int crldist_idx = 0, pkey_usage_period_idx = 0;
 	char pfx[16];
 
@@ -1225,6 +1283,19 @@ print_extensions(gnutls_buffer_st * str, const char *prefix, int type,
 
 			if (type == TYPE_CRT)
 				print_aia(str, cert.crt);
+		} else if (strcmp(oid, "2.5.29.30") == 0) {
+			if (nc_idx) {
+				addf(str,
+				     "error: more than one name constraints extension\n");
+				continue;
+			}
+			nc_idx++;
+
+			addf(str, _("%s\t\tName Constraints (%s):\n"), prefix,
+			     critical ? _("critical") : _("not critical"));
+
+			if (type == TYPE_CRT)
+				print_nc(str, prefix, cert.crt);
 		} else {
 			char *buffer;
 			size_t extlen = 0;
