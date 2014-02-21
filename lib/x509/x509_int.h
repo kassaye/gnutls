@@ -139,6 +139,11 @@ _gnutls_parse_general_name2(ASN1_TYPE src, const char *src_name,
 			   int seq, gnutls_datum_t *dname, 
 			   unsigned int *ret_type, int othername_oid);
 
+int
+_gnutls_write_new_general_name(ASN1_TYPE ext, const char *ext_name,
+		       gnutls_x509_subject_alt_name_t type,
+		       const void *data, unsigned int data_size);
+
 /* dsa.c */
 
 

@@ -872,8 +872,8 @@ _gnutls_write_general_name(ASN1_TYPE ext, const char *ext_name,
 	return 0;
 }
 
-static int
-write_new_general_name(ASN1_TYPE ext, const char *ext_name,
+int
+_gnutls_write_new_general_name(ASN1_TYPE ext, const char *ext_name,
 		       gnutls_x509_subject_alt_name_t type,
 		       const void *data, unsigned int data_size)
 {
@@ -937,7 +937,7 @@ _gnutls_x509_ext_gen_subject_alt_name(gnutls_x509_subject_alt_name_t
 		}
 	}
 
-	result = write_new_general_name(ext, "", type, data, data_size);
+	result = _gnutls_write_new_general_name(ext, "", type, data, data_size);
 	if (result < 0) {
 		gnutls_assert();
 		asn1_delete_structure(&ext);
@@ -1110,7 +1110,7 @@ _gnutls_x509_ext_gen_crl_dist_points(gnutls_x509_subject_alt_name_t
 #endif
 
 	result =
-	    write_new_general_name(ext, "?LAST.distributionPoint.fullName",
+	    _gnutls_write_new_general_name(ext, "?LAST.distributionPoint.fullName",
 				   type, data, data_size);
 	if (result < 0) {
 		gnutls_assert();
