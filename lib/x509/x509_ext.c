@@ -101,8 +101,9 @@ int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t sans, unsigned int s
 	if (seq >= sans->size)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 
-	if (san)
-		memcpy(san, &sans[seq].san, sizeof(gnutls_datum_t));
+	if (san) {
+		memcpy(san, &sans->san[seq], sizeof(gnutls_datum_t));
+	}
 
 	if (san_type)
 		*san_type = sans->type[seq];
