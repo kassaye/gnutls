@@ -408,4 +408,17 @@ _gnutls_x509_crt_check_revocation(gnutls_x509_crt_t cert,
 				  int crl_list_length,
 				  gnutls_verify_output_function func);
 
+typedef struct gnutls_name_constraints_st {
+	struct name_constraints_node_st * permitted;
+	struct name_constraints_node_st * excluded;
+} gnutls_name_constraints_st;
+
+typedef struct name_constraints_node_st {
+	unsigned type;
+	gnutls_datum_t name;
+	struct name_constraints_node_st *next;
+} name_constraints_node_st;
+
+int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
+				    name_constraints_node_st ** _nc);
 #endif

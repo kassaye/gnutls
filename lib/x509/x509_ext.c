@@ -298,6 +298,178 @@ int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t sans,
 	return 0;
 }
 
+/**
+ * gnutls_x509_crt_get_name_constraints:
+ * @crt: should contain a #gnutls_x509_crt_t structure
+ * @nc: The nameconstraints intermediate structure
+ * @flags: zero or %GNUTLS_NAME_CONSTRAINTS_FLAG_APPEND
+ * @critical: the extension status
+ *
+ * This function will return an intermediate structure containing
+ * the name constraints of the provided CA certificate. That
+ * structure can be used in combination with gnutls_x509_name_constraints_check()
+ * to verify whether a server's name is in accordance with the constraints.
+ *
+ * When the @flags is set to %GNUTLS_NAME_CONSTRAINTS_FLAG_APPEND, then if 
+ * the @nc structure is empty
+ * this function will behave identically as if the flag was not set.
+ * Otherwise if there are elements in the @nc structure then only the
+ * excluded constraints will be appended to the constraints.
+ *
+ * Note that @nc must be initialized prior to calling this function.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the extension is not present, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
+					 gnutls_x509_name_constraints_t nc,
+					 unsigned int flags)
+{
+	int result, ret;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+
+	result = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.NameConstraints", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	if (!(flags & GNUTLS_NAME_CONSTRAINTS_FLAG_APPEND) || (nc->permitted == NULL && nc->excluded == NULL)) {
+		ret = _gnutls_extract_name_constraints(c2, "permittedSubtrees", &nc->permitted);
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+	}
+
+	ret = _gnutls_extract_name_constraints(c2, "excludedSubtrees", &nc->excluded);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = 0;
+
+ cleanup:
+	asn1_delete_structure(&c2);
+
+	return ret;
+}
+
+int gnutls_x509_ext_set_name_constraints(gnutls_x509_name_constraints_t nc,
+					 gnutls_datum_t * ext)
+{
+int ret, result;
+uint8_t null = 0;
+ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+struct name_constraints_node_st * tmp;
+
+	if (nc->permitted == NULL && nc->excluded == NULL)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	result = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.NameConstraints", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	if (nc->permitted == NULL) {
+		asn1_write_value(c2, "permittedSubtrees", NULL, 0);
+	} else {
+		tmp = nc->permitted;
+		do {
+			result = asn1_write_value(c2, "permittedSubtrees", "NEW", 1);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				ret = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			result = asn1_write_value(c2, "permittedSubtrees.?LAST.maximum", NULL, 0);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				ret = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			result = asn1_write_value(c2, "permittedSubtrees.?LAST.minimum", &null, 1);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				ret = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			ret = _gnutls_write_general_name(c2, "permittedSubtrees.?LAST.base", 
+						tmp->type, tmp->name.data, tmp->name.size);
+			if (ret < 0) {
+				gnutls_assert();
+				goto cleanup;
+			}
+			tmp = tmp->next;
+		} while(tmp != NULL);
+	}
+
+	if (nc->excluded == NULL) {
+		asn1_write_value(c2, "excludedSubtrees", NULL, 0);
+	} else {
+		tmp = nc->excluded;
+		do {
+			result = asn1_write_value(c2, "excludedSubtrees", "NEW", 1);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				ret = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			result = asn1_write_value(c2, "excludedSubtrees.?LAST.maximum", NULL, 0);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				ret = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			result = asn1_write_value(c2, "excludedSubtrees.?LAST.minimum", &null, 1);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				ret = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			ret = _gnutls_write_general_name(c2, "excludedSubtrees.?LAST.base", 
+						tmp->type, tmp->name.data, tmp->name.size);
+			if (ret < 0) {
+				gnutls_assert();
+				goto cleanup;
+			}
+			tmp = tmp->next;
+		} while(tmp != NULL);
+
+	}
+
+	ret = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = 0;
+
+cleanup:
+	asn1_delete_structure(&c2);
+	return ret;
+}
+
 #if 0
 
 typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
@@ -317,13 +489,6 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t dp,
 					gnutls_datum_t * ext);
 
-int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
-					 gnutls_x509_name_constraints_t nc,
-					 unsigned int flags,
-					 unsigned int *critical);
-int gnutls_x509_ext_set_name_constraints(gnutls_x509_name_constraints_t nc,
-					 unsigned int critical,
-					 gnutls_datum_t * ext);
 
 typedef struct gnutls_aia_st *gnutls_aia_t;
 
