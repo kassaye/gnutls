@@ -24,7 +24,6 @@
 #include <gnutls_int.h>
 
 #include <gnutls_datum.h>
-#include <gnutls_global.h>
 #include <gnutls_errors.h>
 #include <common.h>
 #include <gnutls_x509.h>
@@ -32,7 +31,7 @@
 #include <c-ctype.h>
 #include <gnutls/x509-ext.h>
 
-#define MAX_ENTRIES 32
+#define MAX_ENTRIES 64
 struct gnutls_subject_alt_names_st {
 	unsigned int type[MAX_ENTRIES];
 	gnutls_datum_t san[MAX_ENTRIES];
@@ -61,6 +60,16 @@ int gnutls_subject_alt_names_init(gnutls_subject_alt_names_t * sans)
 	return 0;
 }
 
+static void subject_alt_names_deinit(gnutls_subject_alt_names_t sans)
+{
+unsigned int i;
+
+	for (i=0;i<sans->size;i++) {
+		gnutls_free(sans->san[i].data);
+		gnutls_free(sans->othername_oid[i].data);
+	}
+}
+
 /**
  * gnutls_subject_alt_names_deinit:
  * @sans: The alternative names structure
@@ -71,12 +80,7 @@ int gnutls_subject_alt_names_init(gnutls_subject_alt_names_t * sans)
  **/
 void gnutls_subject_alt_names_deinit(gnutls_subject_alt_names_t sans)
 {
-unsigned int i;
-
-	for (i=0;i<sans->size;i++) {
-		gnutls_free(sans->san[i].data);
-		gnutls_free(sans->othername_oid[i].data);
-	}
+	subject_alt_names_deinit(sans);
 	gnutls_free(sans);
 }
 
@@ -85,10 +89,12 @@ unsigned int i;
  * @sans: The alternative names structure
  * @seq: The index of the name to get
  * @san_type: Will hold the type of the name (of %gnutls_subject_alt_names_t)
- * @san: The alternative name data
+ * @san: The alternative name data (should be treated as constant)
+ * @othername_oid: The object identifier if @san_type is %GNUTLS_SAN_OTHERNAME (should be treated as constant)
  *
  * This function will return a specific alternative name as stored in
- * the @sans structure.
+ * the @sans structure. The returned values should be treated as constant
+ * and valid for the lifetime of @sans.
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
  * if the index is out of bounds, otherwise a negative error value.
@@ -96,7 +102,8 @@ unsigned int i;
  * Since: 3.3.0
  **/
 int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t sans, unsigned int seq,
-				 unsigned int *san_type, gnutls_datum_t * san)
+				 unsigned int *san_type, gnutls_datum_t * san,
+				 gnutls_datum_t * othername_oid)
 {
 	if (seq >= sans->size)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
@@ -108,36 +115,10 @@ int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t sans, unsigned int s
 	if (san_type)
 		*san_type = sans->type[seq];
 
-	return 0;
-}
-
-/**
- * gnutls_subject_alt_names_get_othername_oid:
- * @sans: The alternative names structure
- * @seq: The index of the name to get
- * @oid: The object identifier
- *
- * This function will return a the object identifier (as a null terminated string),
- * of the specified name. The output of that function is valid only when the
- * type of name is otherName.
- *
- * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
- * if the index is out of bounds, otherwise a negative error value.
- *
- * Since: 3.3.0
- **/
-int gnutls_subject_alt_names_get_othername_oid(gnutls_subject_alt_names_t sans,
-					       unsigned int seq,
-					       gnutls_datum_t * oid)
-{
-	if (seq >= sans->size)
-		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
-
-	if (sans->type[seq] != GNUTLS_SAN_OTHERNAME)
-		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
-
-	oid->data = sans->othername_oid[seq].data;
-	oid->size = sans->othername_oid[seq].size;
+	if (sans->type[seq] == GNUTLS_SAN_OTHERNAME) {
+		othername_oid->data = sans->othername_oid[seq].data;
+		othername_oid->size = sans->othername_oid[seq].size;
+	}
 
 	return 0;
 }
@@ -581,11 +562,267 @@ int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
 	return ret;
 }
 
-#if 0
+struct gnutls_aki_st {
+	gnutls_datum_t id;
+	struct gnutls_subject_alt_names_st cert_issuer;
+	gnutls_datum_t serial;
+};
+
+/**
+ * gnutls_aki_init:
+ * @aki: The authority key ID structure
+ *
+ * This function will initialize an authority key ID structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_aki_init(gnutls_aki_t * aki)
+{
+	*aki = gnutls_calloc(1, sizeof(struct gnutls_aki_st));
+	if (*aki == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+
+	return 0;
+}
+
+/**
+ * gnutls_aki_get_id:
+ * @aki: The authority key ID structure
+ * @id: Will hold the identifier
+ *
+ * This function will return the key identifier as stored in
+ * the @aki structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the index is out of bounds, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_aki_get_id(gnutls_aki_t aki, gnutls_datum_t *id)
+{
+	if (aki->id.size == 0)
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+
+	memcpy(id, &aki->id, sizeof(gnutls_datum_t));
+	return 0;
+}
+
+/**
+ * gnutls_aki_set_id:
+ * @aki: The authority key ID structure
+ * @id: the key identifier
+ *
+ * This function will set the keyIdentifier to be stored in the @aki
+ * structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_aki_set_id(gnutls_aki_t aki, const gnutls_datum_t *id)
+{
+	return _gnutls_set_datum(&aki->id, id->data, id->size);
+}
+
+/**
+ * gnutls_aki_set_cert_issuer:
+ * @aki: The authority key ID structure
+ * @san_type: the type of the name (of %gnutls_subject_alt_names_t), may be null
+ * @san: The alternative name data
+ * @othername_oid: The object identifier if @san_type is %GNUTLS_SAN_OTHERNAME
+ * @serial: The authorityCertSerialNumber number (may be null)
+ *
+ * This function will set the authorityCertIssuer name and the authorityCertSerialNumber 
+ * to be stored in the @aki structure. When storing multiple names, the serial
+ * should be set on the first call, and subsequent calls should use a %NULL serial.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_aki_set_cert_issuer(gnutls_aki_t aki, 
+				 unsigned int san_type, 
+				 const gnutls_datum_t * san,
+				 const char *othername_oid,
+				 const gnutls_datum_t * serial)
+{
+	int ret;
+
+	if (aki->cert_issuer.size+1 > MAX_ENTRIES)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+	
+	ret = _gnutls_set_datum(&aki->serial, serial->data, serial->size);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	aki->cert_issuer.type[aki->cert_issuer.size] = san_type;
+
+	ret = _gnutls_set_datum(&aki->cert_issuer.san[aki->cert_issuer.size], san->data, san->size);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	if (othername_oid) {
+		aki->cert_issuer.othername_oid[aki->cert_issuer.size].data = (uint8_t*)gnutls_strdup(othername_oid);
+		if (aki->cert_issuer.othername_oid[aki->cert_issuer.size].data == NULL) {
+			gnutls_free(aki->cert_issuer.san[aki->cert_issuer.size].data);
+			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+		}
+		aki->cert_issuer.othername_oid[aki->cert_issuer.size].size = strlen(othername_oid);
+	}
+
+	aki->cert_issuer.size++;
+
+	return 0;
+}
+
+/**
+ * gnutls_aki_get_cert_issuer:
+ * @aki: The authority key ID structure
+ * @seq: The index of the name to get
+ * @san_type: Will hold the type of the name (of %gnutls_subject_alt_names_t), may be null
+ * @san: The alternative name data (may be null)
+ * @othername_oid: The object identifier if @san_type is %GNUTLS_SAN_OTHERNAME (should be treated as constant)
+ * @serial: The authorityCertSerialNumber number (may be null)
+ *
+ * This function will return a specific authorityCertIssuer name as stored in
+ * the @aki structure, as well as the authorityCertSerialNumber.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the index is out of bounds, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
+				 unsigned int *san_type, gnutls_datum_t * san,
+				 gnutls_datum_t *othername_oid,
+				 gnutls_datum_t *serial)
+{
+	if (seq >= aki->cert_issuer.size)
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+
+	if (aki->serial.size == 0)
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+
+	if (serial)
+		memcpy(serial, &aki->serial, sizeof(gnutls_datum_t));
+
+	if (san) {
+		memcpy(san, &aki->cert_issuer.san[seq], sizeof(gnutls_datum_t));
+	}
+
+	if (othername_oid != NULL && aki->cert_issuer.type[seq] == GNUTLS_SAN_OTHERNAME) {
+		othername_oid->data = aki->cert_issuer.othername_oid[seq].data;
+		othername_oid->size = aki->cert_issuer.othername_oid[seq].size;
+	}
+
+	if (san_type)
+		*san_type = aki->cert_issuer.type[seq];
+
+	return 0;
+	
+}
+
+/**
+ * gnutls_aki_deinit:
+ * @aki: The authority key identifier structure
+ *
+ * This function will deinitialize an authority key identifier structure.
+ *
+ * Since: 3.3.0
+ **/
+void gnutls_aki_deinit(gnutls_aki_t aki)
+{
+	gnutls_free(aki->serial.data);
+	gnutls_free(aki->id.data);
+	subject_alt_names_deinit(&aki->cert_issuer);
+	gnutls_free(aki);
+}
+
+
+/**
+ * gnutls_x509_ext_get_authority_key_id:
+ * @ext: a DER encoded extension
+ * @aki: An initialized authority key identifier structure
+ *
+ * This function will return the subject key ID stored in the provided
+ * AuthorityKeyIdentifier extension.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the extension is not present, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
+					 gnutls_aki_t aki)
+{
+	int ret;
+	unsigned i;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+
+	ret = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.AuthorityKeyIdentifier", &c2);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(ret);
+	}
+
+	ret = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(ret);
+		goto cleanup;
+	}
+
+	/* Read authorityCertIssuer */
+	i = 0;
+	do {
+		ret = _gnutls_parse_general_name2(c2, "authorityCertIssuer", i, 
+			&aki->cert_issuer.san[i], &aki->cert_issuer.type[i], 0);
+		if (ret < 0)
+			break;
+
+		if (aki->cert_issuer.type[i] == GNUTLS_SAN_OTHERNAME) {
+			ret = _gnutls_parse_general_name2(c2, "authorityCertIssuer", i, &aki->cert_issuer.othername_oid[i], NULL, 1);
+			if (ret < 0)
+				break;
+		}
+
+		i++;
+	} while(ret >= 0 && i < MAX_ENTRIES);
+
+	aki->cert_issuer.size = i;
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	/* Read the serial number */
+	ret = _gnutls_x509_read_value(c2, "authorityCertSerialNumber", &aki->serial);
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	/* Read the key identifier */
+	ret = _gnutls_x509_read_value(c2, "keyIdentifier", &aki->id);
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = 0;
+
+ cleanup:
+	asn1_delete_structure(&c2);
+
+	return ret;
+}
 
 /**
  * gnutls_x509_ext_set_authority_key_id:
- * @id: The key identifier
+ * @aki: An initialized authority key identifier structure
  * @ext: Will hold the DER encoded extension
  *
  * This function will convert the provided key identifier to a
@@ -597,31 +834,77 @@ int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_set_authority_key_id(const gnutls_datum_t * id,
+int gnutls_x509_ext_set_authority_key_id(gnutls_aki_t aki,
 					 gnutls_datum_t * ext)
 {
-	
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	unsigned i;
+	int result, ret;
+
+	result =
+	    asn1_create_element(_gnutls_get_pkix(),
+				"PKIX1.AuthorityKeyIdentifier", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	if (aki->id.data != NULL) {
+		result = asn1_write_value(c2, "keyIdentifier", aki->id.data, aki->id.size);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			ret = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+	} else {
+		asn1_write_value(c2, "keyIdentifier", NULL, 0);
+	}
+
+	if (aki->serial.data != NULL) {
+		result = asn1_write_value(c2, "authorityCertSerialNumber", aki->serial.data, aki->serial.size);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			ret = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+	} else {
+		asn1_write_value(c2, "authorityCertSerialNumber", NULL, 0);
+	}
+
+
+	if (aki->cert_issuer.size == 0) {
+		asn1_write_value(c2, "authorityCertIssuer", NULL, 0);
+	} else {
+		for (i=0;i<aki->cert_issuer.size;i++) {
+			ret = _gnutls_write_new_general_name(c2, "authorityCertIssuer", 
+				aki->cert_issuer.type[i], 
+				aki->cert_issuer.san[i].data,
+				aki->cert_issuer.san[i].size);
+			if (result < 0) {
+				gnutls_assert();
+				goto cleanup;
+			}
+		}
+	}
+
+	ret = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = 0;
+ cleanup:
+	asn1_delete_structure(&c2);
+	return ret;
+
 }
 
 
-/**
- * gnutls_x509_ext_get_authority_key_id:
- * @ext: a DER encoded extension
- * @id: will contain the subject key ID
- *
- * This function will return the subject key ID stored in the provided
- * AuthorityKeyIdentifier extension.
- *
- * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
- * if the extension is not present, otherwise a negative error value.
- *
- * Since: 3.3.0
- **/
-int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
-					 gnutls_datum_t * id)
-{
-	
-}
+/* XXX: use authority key IDs in x509.c and x509_write.c */
+
+#if 0
+
 typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
 
 int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t *);

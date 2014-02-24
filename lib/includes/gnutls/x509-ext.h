@@ -38,11 +38,9 @@ typedef struct gnutls_subject_alt_names_st *gnutls_subject_alt_names_t;
 
 int gnutls_subject_alt_names_init(gnutls_subject_alt_names_t *);
 void gnutls_subject_alt_names_deinit(gnutls_subject_alt_names_t);
-int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t, unsigned int seq,
-				 unsigned int *san_type, gnutls_datum_t * san);
-int gnutls_subject_alt_names_get_othername_oid(gnutls_subject_alt_names_t,
-					       unsigned int seq,
-					       gnutls_datum_t * oid);
+int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t sans, unsigned int seq,
+				 unsigned int *san_type, gnutls_datum_t * san,
+				 gnutls_datum_t * othername_oid);
 int gnutls_subject_alt_names_set(gnutls_subject_alt_names_t sans,
 				 unsigned int san_type,
 				 const gnutls_datum_t * san,
@@ -101,10 +99,26 @@ int gnutls_x509_ext_get_subject_key_id(const gnutls_datum_t * ext,
 int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
 				       gnutls_datum_t * ext);
 
-int gnutls_x509_ext_set_authority_key_id(const gnutls_datum_t * id,
+typedef struct gnutls_aki_st *gnutls_aki_t;
+
+int gnutls_x509_ext_set_authority_key_id(gnutls_aki_t,
 					 gnutls_datum_t * ext);
 int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
-					 gnutls_datum_t * id);
+					 gnutls_aki_t);
+					 
+int gnutls_aki_init(gnutls_aki_t *);
+int gnutls_aki_get_id(gnutls_aki_t, gnutls_datum_t *id);
+int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
+				 unsigned int *san_type, gnutls_datum_t * san,
+				 gnutls_datum_t *othername_oid,
+				 gnutls_datum_t *serial);
+int gnutls_aki_set_id(gnutls_aki_t aki, const gnutls_datum_t *id);
+int gnutls_aki_set_cert_issuer(gnutls_aki_t aki, 
+				 unsigned int san_type, 
+				 const gnutls_datum_t * san,
+				 const char *othername_oid,
+				 const gnutls_datum_t * serial);
+void gnutls_aki_deinit(gnutls_aki_t);
 
 int gnutls_x509_ext_get_private_key_usage_period(const gnutls_datum_t * ext,
 						 time_t * activation,

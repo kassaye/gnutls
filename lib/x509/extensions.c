@@ -962,37 +962,33 @@ int
 _gnutls_x509_ext_gen_auth_key_id(const void *id, size_t id_size,
 				 gnutls_datum_t * der_ext)
 {
-	ASN1_TYPE ext = ASN1_TYPE_EMPTY;
-	int result;
+	gnutls_aki_t aki;
+	int ret;
+	gnutls_datum_t l_id;
 
-	result =
-	    asn1_create_element(_gnutls_get_pkix(),
-				"PKIX1.AuthorityKeyIdentifier", &ext);
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_aki_init(&aki);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	l_id.data = (void*)id;
+	l_id.size = id_size;
+	ret = gnutls_aki_set_id(aki, &l_id);
+	if (ret < 0) {
 		gnutls_assert();
-		return _gnutls_asn2err(result);
+		goto cleanup;
 	}
 
-	result = asn1_write_value(ext, "keyIdentifier", id, id_size);
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_x509_ext_set_authority_key_id(aki, der_ext);
+	if (ret < 0) {
 		gnutls_assert();
-		asn1_delete_structure(&ext);
-		return _gnutls_asn2err(result);
+		goto cleanup;
 	}
 
-	asn1_write_value(ext, "authorityCertIssuer", NULL, 0);
-	asn1_write_value(ext, "authorityCertSerialNumber", NULL, 0);
+	ret = 0;
 
-	result = _gnutls_x509_der_encode(ext, "", der_ext, 0);
-
-	asn1_delete_structure(&ext);
-
-	if (result < 0) {
-		gnutls_assert();
-		return result;
-	}
-
-	return 0;
+ cleanup:
+ 	gnutls_aki_deinit(aki);
+ 	return ret;
 }
 
 
