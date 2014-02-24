@@ -30,6 +30,7 @@
 #include <gnutls_errors.h>
 #include <common.h>
 #include <gnutls_x509.h>
+#include <gnutls/x509-ext.h>
 #include <x509_b64.h>
 #include "x509_int.h"
 #include <libtasn1.h>
@@ -1208,6 +1209,7 @@ gnutls_x509_crt_set_subject_key_id(gnutls_x509_crt_t cert,
 {
 	int result;
 	gnutls_datum_t old_id, der_data;
+	gnutls_datum_t d_id;
 	unsigned int critical;
 
 	if (cert == NULL) {
@@ -1230,7 +1232,10 @@ gnutls_x509_crt_set_subject_key_id(gnutls_x509_crt_t cert,
 
 	/* generate the extension.
 	 */
-	result = _gnutls_x509_ext_gen_key_id(id, id_size, &der_data);
+	d_id.data = (void*)id;
+	d_id.size = id_size;
+
+	result = gnutls_x509_ext_set_subject_key_id(&d_id, &der_data);
 	if (result < 0) {
 		gnutls_assert();
 		return result;

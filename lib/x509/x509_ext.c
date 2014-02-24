@@ -119,7 +119,7 @@ int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t sans, unsigned int s
  *
  * This function will return a the object identifier (as a null terminated string),
  * of the specified name. The output of that function is valid only when the
- * type of name is othername.
+ * type of name is otherName.
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
  * if the index is out of bounds, otherwise a negative error value.
@@ -191,7 +191,7 @@ int ret;
  * @sans: The alternative names structure
  *
  * This function will export the alternative names in the provided DER-encoded
- * PKIX extension, to a %gnutls_subject_alt_names_t structure. The structure
+ * SubjectAltName PKIX extension, to a %gnutls_subject_alt_names_t structure. The structure
  * must have been initialized.
  * 
  * This function will succeed even if there no subject alternative names
@@ -254,7 +254,7 @@ int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
  * @ext: The DER-encoded extension data
  *
  * This function will convert the provided alternative names structure to a
- * DER-encoded PKIX extension. The output data in @ext will be allocated using
+ * DER-encoded SubjectAltName PKIX extension. The output data in @ext will be allocated using
  * gnutls_malloc().
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
@@ -300,13 +300,12 @@ int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t sans,
 
 /**
  * gnutls_x509_crt_get_name_constraints:
- * @crt: should contain a #gnutls_x509_crt_t structure
+ * @ext: a DER encoded extension
  * @nc: The nameconstraints intermediate structure
  * @flags: zero or %GNUTLS_NAME_CONSTRAINTS_FLAG_APPEND
- * @critical: the extension status
  *
  * This function will return an intermediate structure containing
- * the name constraints of the provided CA certificate. That
+ * the name constraints of the provided NameConstraints extension. That
  * structure can be used in combination with gnutls_x509_name_constraints_check()
  * to verify whether a server's name is in accordance with the constraints.
  *
@@ -366,6 +365,19 @@ int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
 	return ret;
 }
 
+/**
+ * gnutls_x509_ext_set_name_constraints:
+ * @nc: The nameconstraints structure
+ * @ext: Will hold the DER encoded extension
+ *
+ * This function will convert the provided name constraints structure to a
+ * DER-encoded PKIX NameConstraints extension. The output data in @ext will be allocated using
+ * gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
 int gnutls_x509_ext_set_name_constraints(gnutls_x509_name_constraints_t nc,
 					 gnutls_datum_t * ext)
 {
@@ -470,8 +482,146 @@ cleanup:
 	return ret;
 }
 
+/**
+ * gnutls_x509_ext_get_subject_key_id:
+ * @ext: a DER encoded extension
+ * @id: will contain the subject key ID
+ *
+ * This function will return the subject key ID stored in the provided
+ * SubjectKeyIdentifier extension.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the extension is not present, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_subject_key_id(const gnutls_datum_t * ext,
+				       gnutls_datum_t * id)
+{
+	int result, ret;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+
+	if (ext->size == 0 || ext->data == NULL) {
+		gnutls_assert();
+		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
+	}
+
+	result = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.SubjectKeyIdentifier", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	ret = _gnutls_x509_read_value(c2, "", id);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = 0;
+ cleanup:
+	asn1_delete_structure(&c2);
+
+	return ret;
+
+}
+
+/**
+ * gnutls_x509_ext_set_subject_key_id:
+ * @id: The key identifier
+ * @ext: Will hold the DER encoded extension
+ *
+ * This function will convert the provided key identifier to a
+ * DER-encoded PKIX SubjectKeyIdentifier extension. 
+ * The output data in @ext will be allocated using
+ * gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
+				       gnutls_datum_t * ext)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int ret, result;
+
+	result =
+	    asn1_create_element(_gnutls_get_pkix(),
+				"PKIX1.SubjectKeyIdentifier", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result = asn1_write_value(c2, "", id->data, id->size);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	ret = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = 0;
+ cleanup:
+	asn1_delete_structure(&c2);
+	return ret;
+}
+
 #if 0
 
+/**
+ * gnutls_x509_ext_set_authority_key_id:
+ * @id: The key identifier
+ * @ext: Will hold the DER encoded extension
+ *
+ * This function will convert the provided key identifier to a
+ * DER-encoded PKIX AuthorityKeyIdentifier extension. 
+ * The output data in @ext will be allocated using
+ * gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_authority_key_id(const gnutls_datum_t * id,
+					 gnutls_datum_t * ext)
+{
+	
+}
+
+
+/**
+ * gnutls_x509_ext_get_authority_key_id:
+ * @ext: a DER encoded extension
+ * @id: will contain the subject key ID
+ *
+ * This function will return the subject key ID stored in the provided
+ * AuthorityKeyIdentifier extension.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the extension is not present, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
+					 gnutls_datum_t * id)
+{
+	
+}
 typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
 
 int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t *);
@@ -506,20 +656,6 @@ int gnutls_x509_ext_get_authority_info_access(const gnutls_datum_t * ext,
 int gnutls_x509_ext_set_authority_info_access(gnutls_aia_t aia,
 					      unsigned int critical,
 					      gnutls_datum_t * ext);
-
-int gnutls_x509_ext_get_subject_key_id(const gnutls_datum_t * ext,
-				       gnutls_datum_t * id,
-				       unsigned int *critical);
-int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
-				       unsigned int critical,
-				       gnutls_datum_t * ext);
-
-int gnutls_x509_ext_set_authority_key_id(const gnutls_datum_t * id,
-					 unsigned int critical,
-					 gnutls_datum_t * ext);
-int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
-					 gnutls_datum_t * id,
-					 unsigned int *critical);
 
 int gnutls_x509_ext_get_private_key_usage_period(const gnutls_datum_t * ext,
 						 time_t * activation,

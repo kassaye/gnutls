@@ -239,8 +239,6 @@ int _gnutls_x509_ext_gen_crl_dist_points(gnutls_x509_subject_alt_name_t
 					 unsigned int data_size,
 					 unsigned int reason_flags,
 					 gnutls_datum_t * der_ext);
-int _gnutls_x509_ext_gen_key_id(const void *id, size_t id_size,
-				gnutls_datum_t * der_data);
 int _gnutls_x509_ext_gen_auth_key_id(const void *id, size_t id_size,
 				     gnutls_datum_t * der_data);
 int _gnutls_x509_ext_extract_proxyCertInfo(int *pathLenConstraint,

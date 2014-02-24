@@ -823,67 +823,47 @@ gnutls_x509_crt_get_subject_key_id(gnutls_x509_crt_t cert, void *ret,
 				   size_t * ret_size,
 				   unsigned int *critical)
 {
-	int result, len;
-	gnutls_datum_t id;
-	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int result;
+	gnutls_datum_t id = {NULL,0};
+	gnutls_datum_t der = {NULL, 0};
 
 	if (cert == NULL) {
 		gnutls_assert();
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
-
-	if (ret)
-		memset(ret, 0, *ret_size);
-	else
+	if (ret == NULL)
 		*ret_size = 0;
 
 	if ((result =
-	     _gnutls_x509_crt_get_extension(cert, "2.5.29.14", 0, &id,
+	     _gnutls_x509_crt_get_extension(cert, "2.5.29.14", 0, &der,
 					    critical)) < 0) {
 		return result;
 	}
 
-	if (id.size == 0 || id.data == NULL) {
+	result = gnutls_x509_ext_get_subject_key_id(&der, &id);
+	if (result < 0) {
 		gnutls_assert();
-		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
+		goto cleanup;
 	}
 
-	result = asn1_create_element
-	    (_gnutls_get_pkix(), "PKIX1.SubjectKeyIdentifier", &c2);
-	if (result != ASN1_SUCCESS) {
+	if ((unsigned) id.size > *ret_size) {
 		gnutls_assert();
-		_gnutls_free_datum(&id);
-		return _gnutls_asn2err(result);
+		*ret_size = id.size;
+		result = GNUTLS_E_SHORT_MEMORY_BUFFER;
+		goto cleanup;
 	}
 
-	result = asn1_der_decoding(&c2, id.data, id.size, NULL);
-	_gnutls_free_datum(&id);
-
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		asn1_delete_structure(&c2);
-		return _gnutls_asn2err(result);
+	if (ret != NULL) {
+		memcpy(ret, id.data, id.size);
 	}
+	*ret_size = id.size;
+	result = 0;
 
-	len = *ret_size;
-	result = asn1_read_value(c2, "", ret, &len);
-
-	*ret_size = len;
-	asn1_delete_structure(&c2);
-
-	if (result == ASN1_VALUE_NOT_FOUND
-	    || result == ASN1_ELEMENT_NOT_FOUND) {
-		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
-	}
-
-	if (result != ASN1_SUCCESS) {
-		if (result != ASN1_MEM_ERROR)
-			gnutls_assert();
-		return _gnutls_asn2err(result);
-	}
-
-	return 0;
+ cleanup:
+	gnutls_free(der.data);
+	gnutls_free(id.data);
+	return result;
 }
 
 static int
