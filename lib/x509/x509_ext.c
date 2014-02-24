@@ -185,22 +185,23 @@ int ret;
 }
 
 /**
- * gnutls_x509_ext_get_subject_alt_name:
+ * gnutls_x509_ext_get_subject_alt_names:
  * @ext: The DER-encoded extension data
  * @sans: The alternative names structure
- * @critical: will indicate whether the extension is critical or not
  *
  * This function will export the alternative names in the provided DER-encoded
  * PKIX extension, to a %gnutls_subject_alt_names_t structure. The structure
  * must have been initialized.
+ * 
+ * This function will succeed even if there no subject alternative names
+ * in the structure.
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_get_subject_alt_name(const gnutls_datum_t * ext,
-					 gnutls_subject_alt_names_t sans,
-					 unsigned int *critical)
+int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
+					  gnutls_subject_alt_names_t sans)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	int result, ret;
@@ -235,21 +236,20 @@ int gnutls_x509_ext_get_subject_alt_name(const gnutls_datum_t * ext,
 	} while(ret >= 0 && i < MAX_ENTRIES);
 
 	sans->size = i;
-
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		gnutls_assert();
 		goto cleanup;
 	}
 
+	ret = 0;
  cleanup:
 	asn1_delete_structure(&c2);
 	return ret;
 }
 
 /**
- * gnutls_x509_ext_set_subject_alt_name:
+ * gnutls_x509_ext_set_subject_alt_names:
  * @sans: The alternative names structure
- * @critical: indicates whether the extension is critical or not
  * @ext: The DER-encoded extension data
  *
  * This function will convert the provided alternative names structure to a
@@ -260,9 +260,8 @@ int gnutls_x509_ext_get_subject_alt_name(const gnutls_datum_t * ext,
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_set_subject_alt_name(gnutls_subject_alt_names_t sans,
-					 unsigned int critical,
-					 gnutls_datum_t * ext)
+int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t sans,
+					  gnutls_datum_t * ext)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	int result;
@@ -299,14 +298,6 @@ int gnutls_x509_ext_set_subject_alt_name(gnutls_subject_alt_names_t sans,
 }
 
 #if 0
-
-int gnutls_x509_ext_get_issuer_alt_name(const gnutls_datum_t * ext,
-					gnutls_subject_alt_names_t,
-					unsigned int *san_type,
-					unsigned int *critical);
-int gnutls_x509_ext_set_issuer_alt_name(gnutls_subject_alt_names_t,
-					unsigned int critical,
-					gnutls_datum_t * ext);
 
 typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
 

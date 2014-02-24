@@ -49,12 +49,10 @@ int gnutls_subject_alt_names_set(gnutls_subject_alt_names_t sans,
 				 const char* othername_oid);
 
 
-int gnutls_x509_ext_get_subject_alt_name(const gnutls_datum_t * ext,
-					 gnutls_subject_alt_names_t,
-					 unsigned int *critical);
-int gnutls_x509_ext_set_subject_alt_name(gnutls_subject_alt_names_t,
-					 unsigned int critical,
-					 gnutls_datum_t * ext);
+int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
+					 gnutls_subject_alt_names_t);
+int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t,
+					  gnutls_datum_t * ext);
 
 /* They are exactly the same */
 #define gnutls_x509_ext_get_issuer_alt_name gnutls_x509_ext_get_subject_alt_name
@@ -72,17 +70,14 @@ int gnutls_crl_dist_points_set(gnutls_crl_dist_points_t,
 				 const gnutls_datum_t *dist, unsigned int reason_flags);
 
 int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
-					gnutls_crl_dist_points_t dp,
-					unsigned int *critical);
+					gnutls_crl_dist_points_t dp);
 int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t dp,
 					gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
 					 gnutls_x509_name_constraints_t nc,
-					 unsigned int flags,
-					 unsigned int *critical);
+					 unsigned int flags);
 int gnutls_x509_ext_set_name_constraints(gnutls_x509_name_constraints_t nc,
-					 unsigned int critical,
 					 gnutls_datum_t * ext);
 
 typedef struct gnutls_aia_st *gnutls_aia_t;
@@ -97,59 +92,48 @@ int gnutls_aia_set(gnutls_aia_t,
 		   const gnutls_datum_t *data);
 
 int gnutls_x509_ext_get_authority_info_access(const gnutls_datum_t * ext,
-				gnutls_aia_t, unsigned int *critical);
+				gnutls_aia_t);
 int gnutls_x509_ext_set_authority_info_access(gnutls_aia_t aia,
-					      unsigned int critical,
 					      gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_subject_key_id(const gnutls_datum_t * ext,
-				       gnutls_datum_t * id,
-				       unsigned int *critical);
+				       gnutls_datum_t * id);
 int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
-				       unsigned int critical,
 				       gnutls_datum_t * ext);
 
 int gnutls_x509_ext_set_authority_key_id(const gnutls_datum_t * id,
-					 unsigned int critical,
 					 gnutls_datum_t * ext);
 int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
-					 gnutls_datum_t * id,
-					 unsigned int *critical);
+					 gnutls_datum_t * id);
 
 int gnutls_x509_ext_get_private_key_usage_period(const gnutls_datum_t * ext,
 						 time_t * activation,
-						 time_t * expiration,
-						 unsigned int *critical);
+						 time_t * expiration);
 int gnutls_x509_ext_set_private_key_usage_period(time_t * activation,
 						 time_t * expiration,
-						 unsigned int critical,
 						 gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_basic_constraints(const gnutls_datum_t * ext,
-					  unsigned int *ca, int *pathlen,
-					  unsigned int *critical);
+					  unsigned int *ca, int *pathlen);
 int gnutls_x509_ext_set_basic_constraints(unsigned int ca, int pathlen,
-					  unsigned int critical,
 					  gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_key_usage(const gnutls_datum_t * ext,
-				  unsigned int *key_usage,
-				  unsigned int *critical);
-int gnutls_x509_ext_set_key_usage(unsigned int key_usage, unsigned int critical,
+				  unsigned int *key_usage);
+int gnutls_x509_ext_set_key_usage(unsigned int key_usage,
 				  gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
 			      char **policyLanguage, char **policy,
-			      size_t * sizeof_policy, unsigned int *critical);
+			      size_t * sizeof_policy);
 int gnutls_x509_ext_set_proxy(int pathLenConstraint, const char *policyLanguage,
 			      const char *policy, size_t sizeof_policy,
-			      unsigned int critical, gnutls_datum_t * ext);
+			      gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_policy_st
-				 **policy, unsigned int *max_policies,
-				 unsigned int *critical);
+				 **policy, unsigned int *max_policies);
 int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
-				 unsigned int n_policies, unsigned int critical,
+				 unsigned int n_policies,
 				 gnutls_datum_t * ext);
 
 

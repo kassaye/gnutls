@@ -28,6 +28,7 @@
 #include <gnutls_global.h>
 #include <libtasn1.h>
 #include <common.h>
+#include <gnutls/x509-ext.h>
 #include <x509_int.h>
 #include <gnutls_datum.h>
 
@@ -910,50 +911,49 @@ int
 _gnutls_x509_ext_gen_subject_alt_name(gnutls_x509_subject_alt_name_t
 				      type, const void *data,
 				      unsigned int data_size,
-				      gnutls_datum_t * prev_der_ext,
+				      const gnutls_datum_t * prev_der_ext,
 				      gnutls_datum_t * der_ext)
 {
-	ASN1_TYPE ext = ASN1_TYPE_EMPTY;
-	int result;
+	int ret;
+	gnutls_subject_alt_names_t sans = NULL;
+	gnutls_datum_t name;
 
-	result =
-	    asn1_create_element(_gnutls_get_pkix(), "PKIX1.GeneralNames",
-				&ext);
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_subject_alt_names_init(&sans);
+	if (ret < 0) {
 		gnutls_assert();
-		return _gnutls_asn2err(result);
+		return ret;
 	}
 
-	if (prev_der_ext != NULL && prev_der_ext->data != NULL
-	    && prev_der_ext->size != 0) {
-		result =
-		    asn1_der_decoding(&ext, prev_der_ext->data,
-				      prev_der_ext->size, NULL);
+	if (prev_der_ext && prev_der_ext->data != NULL && 
+		prev_der_ext->size != 0) {
 
-		if (result != ASN1_SUCCESS) {
+		ret = gnutls_x509_ext_get_subject_alt_names(prev_der_ext, sans);
+		if (ret < 0) {
 			gnutls_assert();
-			asn1_delete_structure(&ext);
-			return _gnutls_asn2err(result);
+			goto cleanup;
 		}
 	}
 
-	result = _gnutls_write_new_general_name(ext, "", type, data, data_size);
-	if (result < 0) {
+	name.data = (void*)data;
+	name.size = data_size;
+	ret = gnutls_subject_alt_names_set(sans, type, &name, NULL);
+	if (ret < 0) {
 		gnutls_assert();
-		asn1_delete_structure(&ext);
-		return result;
+		goto cleanup;
 	}
 
-	result = _gnutls_x509_der_encode(ext, "", der_ext, 0);
-
-	asn1_delete_structure(&ext);
-
-	if (result < 0) {
+	ret = gnutls_x509_ext_set_subject_alt_names(sans, der_ext);
+	if (ret < 0) {
 		gnutls_assert();
-		return result;
+		goto cleanup;
 	}
 
-	return 0;
+	ret = 0;
+cleanup:
+	if (sans != NULL)
+		gnutls_subject_alt_names_deinit(sans);
+
+	return ret;
 }
 
 /* generate the SubjectKeyID in a DER encoded extension

@@ -232,7 +232,7 @@ int _gnutls_x509_ext_gen_keyUsage(uint16_t usage,
 int _gnutls_x509_ext_gen_subject_alt_name(gnutls_x509_subject_alt_name_t
 					  type, const void *data,
 					  unsigned int data_size,
-					  gnutls_datum_t * prev_der_ext,
+					  const gnutls_datum_t * prev_der_ext,
 					  gnutls_datum_t * der_ext);
 int _gnutls_x509_ext_gen_crl_dist_points(gnutls_x509_subject_alt_name_t
 					 type, const void *data,

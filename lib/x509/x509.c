@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2003-2012 Free Software Foundation, Inc.
- * Author: Nikos Mavrogiannopoulos, Simon Josefsson, Howard Chu
+ * Copyright (C) 2003-2014 Free Software Foundation, Inc.
+ * Authors: Nikos Mavrogiannopoulos, Simon Josefsson, Howard Chu
  *
  * This file is part of GnuTLS.
  *
@@ -27,6 +27,7 @@
 #include <gnutls_global.h>
 #include <gnutls_errors.h>
 #include <common.h>
+#include <gnutls/x509-ext.h>
 #include <gnutls_x509.h>
 #include <x509_b64.h>
 #include <x509_int.h>
@@ -1295,28 +1296,28 @@ cleanup:
 
 static int
 get_alt_name(gnutls_x509_crt_t cert, const char *extension_id,
-	     unsigned int seq, void *alt,
+	     unsigned int seq, uint8_t *alt,
 	     size_t * alt_size, unsigned int *alt_type,
 	     unsigned int *critical, int othername_oid)
 {
-	int result;
-	gnutls_datum_t dnsname;
-	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int ret;
+	gnutls_datum_t dnsname = {NULL, 0};
+	gnutls_datum_t res;
+	gnutls_subject_alt_names_t sans = NULL;
+	unsigned int type, size_to_check;
 
 	if (cert == NULL) {
 		gnutls_assert();
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
-	if (alt)
-		memset(alt, 0, *alt_size);
-	else
+	if (alt == NULL)
 		*alt_size = 0;
 
-	if ((result =
+	if ((ret =
 	     _gnutls_x509_crt_get_extension(cert, extension_id, 0,
 					    &dnsname, critical)) < 0) {
-		return result;
+		return ret;
 	}
 
 	if (dnsname.size == 0 || dnsname.data == NULL) {
@@ -1324,44 +1325,53 @@ get_alt_name(gnutls_x509_crt_t cert, const char *extension_id,
 		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 	}
 
-	if (strcmp("2.5.29.17", extension_id) == 0)
-		result = asn1_create_element(_gnutls_get_pkix(),
-					     "PKIX1.SubjectAltName", &c2);
-	else if (strcmp("2.5.29.18", extension_id) == 0)
-		result = asn1_create_element(_gnutls_get_pkix(),
-					     "PKIX1.IssuerAltName", &c2);
-	else {
+	ret = gnutls_subject_alt_names_init(&sans);
+	if (ret < 0) {
 		gnutls_assert();
-		return GNUTLS_E_INTERNAL_ERROR;
+		goto cleanup;
 	}
 
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_x509_ext_get_subject_alt_names(&dnsname, sans);
+	if (ret < 0) {
 		gnutls_assert();
-		_gnutls_free_datum(&dnsname);
-		return _gnutls_asn2err(result);
+		goto cleanup;
 	}
 
-	result = asn1_der_decoding(&c2, dnsname.data, dnsname.size, NULL);
-	_gnutls_free_datum(&dnsname);
-
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_subject_alt_names_get(sans, seq, &type, &res);
+	if (ret < 0) {
 		gnutls_assert();
-		asn1_delete_structure(&c2);
-		return _gnutls_asn2err(result);
+		goto cleanup;
 	}
 
-	result =
-	    _gnutls_parse_general_name(c2, "", seq, alt, alt_size,
-				       alt_type, othername_oid);
+	if (alt_type)
+		*alt_type = type;
 
-	asn1_delete_structure(&c2);
-
-	if (result < 0) {
-		gnutls_assert();
-		return result;
+	if (is_type_printable(type)) {
+		size_to_check = res.size + 1;
+	} else {
+		size_to_check = res.size;
 	}
 
-	return result;
+	if ((unsigned) size_to_check > *alt_size) {
+		gnutls_assert();
+		(*alt_size) = size_to_check;
+		ret = GNUTLS_E_SHORT_MEMORY_BUFFER;
+		goto cleanup;
+	}
+
+	if (alt != NULL) {
+		memcpy(alt, res.data, res.size);
+		alt[res.size] = 0;
+	}
+	*alt_size = res.size;
+
+	ret = type;
+cleanup:
+	gnutls_free(dnsname.data);
+	if (sans != NULL)
+		gnutls_subject_alt_names_deinit(sans);
+
+	return ret;
 }
 
 /**
