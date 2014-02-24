@@ -495,6 +495,13 @@ int gnutls_x509_crt_set_subject_alt_name(gnutls_x509_crt_t crt,
 					 type, const void *data,
 					 unsigned int data_size,
 					 unsigned int flags);
+
+int gnutls_x509_crt_set_issuer_alt_name(gnutls_x509_crt_t crt,
+					 gnutls_x509_subject_alt_name_t
+					 type, const void *data,
+					 unsigned int data_size,
+					 unsigned int flags);
+
 int gnutls_x509_crt_sign(gnutls_x509_crt_t crt,
 			 gnutls_x509_crt_t issuer,
 			 gnutls_x509_privkey_t issuer_key);
