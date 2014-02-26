@@ -46,7 +46,7 @@
 int gnutls_x509_crt_init(gnutls_x509_crt_t * cert)
 {
 	gnutls_x509_crt_t tmp;
-	
+
 	FAIL_IF_LIB_ERROR;
 
 	tmp =
@@ -903,6 +903,15 @@ static int copy_data(gnutls_datum_t* str, uint8_t *out, size_t *out_size)
 	return 0;
 }
 
+inline static int is_type_printable(int type)
+{
+	if (type == GNUTLS_SAN_DNSNAME || type == GNUTLS_SAN_RFC822NAME ||
+	    type == GNUTLS_SAN_URI)
+		return 1;
+	else
+		return 0;
+}
+
 /**
  * gnutls_x509_crt_get_authority_key_gn_serial:
  * @cert: should contain a #gnutls_x509_crt_t structure
@@ -963,17 +972,29 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 		goto cleanup;
 	}
 
+	ret = gnutls_x509_ext_get_authority_key_id(&der, aki);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
 	ret = gnutls_aki_get_cert_issuer(aki, seq, &san_type, &san, NULL, &iserial);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
 	}
 
-	ret = copy_string(&san, alt, alt_size);
+	if (is_type_printable(san_type))
+		ret = copy_string(&san, alt, alt_size);
+	else
+		ret = copy_data(&san, alt, alt_size);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
 	}
+
+	if (alt_type)
+		*alt_type = san_type;
 
 	ret = copy_data(&iserial, serial, serial_size);
 	if (ret < 0) {
@@ -1038,7 +1059,22 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 		goto cleanup;
 	}
 
+	ret = gnutls_x509_ext_get_authority_key_id(&der, aki);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
 	ret = gnutls_aki_get_id(aki, &l_id);
+
+	if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		gnutls_datum_t serial;
+		ret = gnutls_aki_get_cert_issuer(aki, 0, NULL, NULL, NULL, &serial);
+		if (ret >= 0)
+			return gnutls_assert_val(GNUTLS_E_X509_UNSUPPORTED_EXTENSION);
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+	}
+
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1100,15 +1136,6 @@ gnutls_x509_crt_get_pk_algorithm(gnutls_x509_crt_t cert,
 
 	return result;
 
-}
-
-inline static int is_type_printable(int type)
-{
-	if (type == GNUTLS_SAN_DNSNAME || type == GNUTLS_SAN_RFC822NAME ||
-	    type == GNUTLS_SAN_URI)
-		return 1;
-	else
-		return 0;
 }
 
 #define XMPP_OID "1.3.6.1.5.5.7.8.5"
@@ -1720,7 +1747,6 @@ gnutls_x509_crt_get_key_usage(gnutls_x509_crt_t cert,
 {
 	int result;
 	gnutls_datum_t keyUsage;
-	uint16_t _usage;
 
 	if (cert == NULL) {
 		gnutls_assert();
@@ -1738,11 +1764,8 @@ gnutls_x509_crt_get_key_usage(gnutls_x509_crt_t cert,
 		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 	}
 
-	result = _gnutls_x509_ext_extract_keyUsage(&_usage, keyUsage.data,
-						   keyUsage.size);
+	result = gnutls_x509_ext_get_key_usage(&keyUsage, key_usage);
 	_gnutls_free_datum(&keyUsage);
-
-	*key_usage = _usage;
 
 	if (result < 0) {
 		gnutls_assert();

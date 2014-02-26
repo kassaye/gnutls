@@ -793,21 +793,21 @@ int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
 	} while(ret >= 0 && i < MAX_ENTRIES);
 
 	aki->cert_issuer.size = i;
-	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE && ret != GNUTLS_E_ASN1_ELEMENT_NOT_FOUND) {
 		gnutls_assert();
 		goto cleanup;
 	}
 
 	/* Read the serial number */
 	ret = _gnutls_x509_read_value(c2, "authorityCertSerialNumber", &aki->serial);
-	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE && ret != GNUTLS_E_ASN1_ELEMENT_NOT_FOUND) {
 		gnutls_assert();
 		goto cleanup;
 	}
 
 	/* Read the key identifier */
 	ret = _gnutls_x509_read_value(c2, "keyIdentifier", &aki->id);
-	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE && ret != GNUTLS_E_ASN1_ELEMENT_NOT_FOUND) {
 		gnutls_assert();
 		goto cleanup;
 	}
@@ -900,8 +900,115 @@ int gnutls_x509_ext_set_authority_key_id(gnutls_aki_t aki,
 
 }
 
+/**
+ * gnutls_x509_ext_get_key_usage:
+ * @ext: the DER encoded extension data
+ * @key_usage: where the key usage bits will be stored
+ *
+ * This function will return certificate's key usage, by reading the DER
+ * data of the keyUsage X.509 extension (2.5.29.15). The key usage value will ORed
+ * values of the: %GNUTLS_KEY_DIGITAL_SIGNATURE,
+ * %GNUTLS_KEY_NON_REPUDIATION, %GNUTLS_KEY_KEY_ENCIPHERMENT,
+ * %GNUTLS_KEY_DATA_ENCIPHERMENT, %GNUTLS_KEY_KEY_AGREEMENT,
+ * %GNUTLS_KEY_KEY_CERT_SIGN, %GNUTLS_KEY_CRL_SIGN,
+ * %GNUTLS_KEY_ENCIPHER_ONLY, %GNUTLS_KEY_DECIPHER_ONLY.
+ *
+ * Returns: the certificate key usage, or a negative error code in case of
+ *   parsing error.  If the certificate does not contain the keyUsage
+ *   extension %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE will be
+ *   returned.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_key_usage(const gnutls_datum_t * ext,
+				  unsigned int *key_usage)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int len, result;
+	uint8_t str[2];
 
-/* XXX: use authority key IDs in x509.c and x509_write.c */
+	str[0] = str[1] = 0;
+	*key_usage = 0;
+
+	if ((result = asn1_create_element
+	     (_gnutls_get_pkix(), "PKIX1.KeyUsage", &c2)) != ASN1_SUCCESS)
+	{
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		asn1_delete_structure(&c2);
+		return _gnutls_asn2err(result);
+	}
+
+	len = sizeof(str);
+	result = asn1_read_value(c2, "", str, &len);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		asn1_delete_structure(&c2);
+		return 0;
+	}
+
+	*key_usage = str[0] | (str[1] << 8);
+
+	asn1_delete_structure(&c2);
+
+	return 0;
+}
+
+/**
+ * gnutls_x509_ext_set_key_usage:
+ * @usage: an ORed sequence of the GNUTLS_KEY_* elements.
+ * @ext: will hold the DER encoded extension data
+ *
+ * This function will convert the keyUsage bit string to a DER
+ * encoded PKIX extension. The @ext data will be allocated using
+ * gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a
+ *   negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_key_usage(unsigned int usage,
+				  gnutls_datum_t * ext)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int result;
+	uint8_t str[2];
+
+	result =
+	    asn1_create_element(_gnutls_get_pkix(), "PKIX1.KeyUsage",
+				&c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	str[0] = usage & 0xff;
+	str[1] = usage >> 8;
+
+	result = asn1_write_value(c2, "", str, 9);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		asn1_delete_structure(&c2);
+		return _gnutls_asn2err(result);
+	}
+
+	result = _gnutls_x509_der_encode(c2, "", ext, 0);
+
+	asn1_delete_structure(&c2);
+
+	if (result < 0) {
+		gnutls_assert();
+		return result;
+	}
+
+	return 0;
+}
 
 #if 0
 
@@ -956,11 +1063,6 @@ int gnutls_x509_ext_set_basic_constraints(unsigned int ca, int pathlen,
 					  unsigned int critical,
 					  gnutls_datum_t * ext);
 
-int gnutls_x509_ext_get_key_usage(const gnutls_datum_t * ext,
-				  unsigned int *key_usage,
-				  unsigned int *critical);
-int gnutls_x509_ext_set_key_usage(unsigned int key_usage, unsigned int critical,
-				  gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
 			      char **policyLanguage, char **policy,

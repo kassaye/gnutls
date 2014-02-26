@@ -33,6 +33,7 @@
 #include <common.h>
 #include <gnutls_x509.h>
 #include <x509_b64.h>
+#include <gnutls/x509-ext.h>
 #include "x509_int.h"
 #include <libtasn1.h>
 
@@ -1584,9 +1585,9 @@ gnutls_x509_crq_get_key_usage(gnutls_x509_crq_t crq,
 			      unsigned int *critical)
 {
 	int result;
-	uint16_t _usage;
 	uint8_t buf[128];
 	size_t buf_size = sizeof(buf);
+	gnutls_datum_t bd;
 
 	if (crq == NULL) {
 		gnutls_assert();
@@ -1601,10 +1602,9 @@ gnutls_x509_crq_get_key_usage(gnutls_x509_crq_t crq,
 		return result;
 	}
 
-	result = _gnutls_x509_ext_extract_keyUsage(&_usage, buf, buf_size);
-
-	*key_usage = _usage;
-
+	bd.data = buf;
+	bd.size = buf_size;
+	result = gnutls_x509_ext_get_key_usage(&bd, key_usage);
 	if (result < 0) {
 		gnutls_assert();
 		return result;
@@ -2079,7 +2079,7 @@ gnutls_x509_crq_set_key_usage(gnutls_x509_crq_t crq, unsigned int usage)
 	/* generate the extension.
 	 */
 	result =
-	    _gnutls_x509_ext_gen_keyUsage((uint16_t) usage, &der_data);
+	    gnutls_x509_ext_set_key_usage(usage, &der_data);
 	if (result < 0) {
 		gnutls_assert();
 		return result;

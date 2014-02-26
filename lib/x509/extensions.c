@@ -545,50 +545,6 @@ _gnutls_x509_crq_set_extension(gnutls_x509_crq_t crq,
 	return 0;
 }
 
-/* Here we only extract the KeyUsage field, from the DER encoded
- * extension.
- */
-int
-_gnutls_x509_ext_extract_keyUsage(uint16_t * keyUsage,
-				  uint8_t * extnValue, int extnValueLen)
-{
-	ASN1_TYPE ext = ASN1_TYPE_EMPTY;
-	int len, result;
-	uint8_t str[2];
-
-	str[0] = str[1] = 0;
-	*keyUsage = 0;
-
-	if ((result = asn1_create_element
-	     (_gnutls_get_pkix(), "PKIX1.KeyUsage", &ext)) != ASN1_SUCCESS)
-	{
-		gnutls_assert();
-		return _gnutls_asn2err(result);
-	}
-
-	result = asn1_der_decoding(&ext, extnValue, extnValueLen, NULL);
-
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		asn1_delete_structure(&ext);
-		return _gnutls_asn2err(result);
-	}
-
-	len = sizeof(str);
-	result = asn1_read_value(ext, "", str, &len);
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		asn1_delete_structure(&ext);
-		return 0;
-	}
-
-	*keyUsage = str[0] | (str[1] << 8);
-
-	asn1_delete_structure(&ext);
-
-	return 0;
-}
-
 /* extract the basicConstraints from the DER encoded extension
  */
 int
@@ -764,45 +720,6 @@ _gnutls_x509_ext_gen_number(const uint8_t * number, size_t nr_size,
 	}
 
 	result = asn1_write_value(ext, "", number, nr_size);
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		asn1_delete_structure(&ext);
-		return _gnutls_asn2err(result);
-	}
-
-	result = _gnutls_x509_der_encode(ext, "", der_ext, 0);
-
-	asn1_delete_structure(&ext);
-
-	if (result < 0) {
-		gnutls_assert();
-		return result;
-	}
-
-	return 0;
-}
-
-/* generate the keyUsage in a DER encoded extension
- * Use an ORed SEQUENCE of GNUTLS_KEY_* for usage.
- */
-int _gnutls_x509_ext_gen_keyUsage(uint16_t usage, gnutls_datum_t * der_ext)
-{
-	ASN1_TYPE ext = ASN1_TYPE_EMPTY;
-	int result;
-	uint8_t str[2];
-
-	result =
-	    asn1_create_element(_gnutls_get_pkix(), "PKIX1.KeyUsage",
-				&ext);
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		return _gnutls_asn2err(result);
-	}
-
-	str[0] = usage & 0xff;
-	str[1] = usage >> 8;
-
-	result = asn1_write_value(ext, "", str, 9);
 	if (result != ASN1_SUCCESS) {
 		gnutls_assert();
 		asn1_delete_structure(&ext);
