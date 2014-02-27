@@ -123,8 +123,8 @@ void gnutls_aki_deinit(gnutls_aki_t);
 int gnutls_x509_ext_get_private_key_usage_period(const gnutls_datum_t * ext,
 						 time_t * activation,
 						 time_t * expiration);
-int gnutls_x509_ext_set_private_key_usage_period(time_t * activation,
-						 time_t * expiration,
+int gnutls_x509_ext_set_private_key_usage_period(time_t activation,
+						 time_t expiration,
 						 gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_basic_constraints(const gnutls_datum_t * ext,

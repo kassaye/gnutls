@@ -1644,6 +1644,7 @@ gnutls_x509_crq_get_basic_constraints(gnutls_x509_crq_t crq,
 	unsigned int tmp_ca;
 	uint8_t buf[256];
 	size_t buf_size = sizeof(buf);
+	gnutls_datum_t bd;
 
 	if (crq == NULL) {
 		gnutls_assert();
@@ -1658,10 +1659,9 @@ gnutls_x509_crq_get_basic_constraints(gnutls_x509_crq_t crq,
 		return result;
 	}
 
-	result =
-	    _gnutls_x509_ext_extract_basicConstraints(&tmp_ca,
-						      pathlen, buf,
-						      buf_size);
+	bd.data = buf;
+	bd.size = buf_size;
+	result = gnutls_x509_ext_get_basic_constraints(&bd, &tmp_ca, pathlen);
 	if (ca)
 		*ca = tmp_ca;
 
@@ -2032,9 +2032,7 @@ gnutls_x509_crq_set_basic_constraints(gnutls_x509_crq_t crq,
 
 	/* generate the extension.
 	 */
-	result =
-	    _gnutls_x509_ext_gen_basicConstraints(ca, pathLenConstraint,
-						  &der_data);
+	result = gnutls_x509_ext_set_basic_constraints(ca, pathLenConstraint, &der_data);
 	if (result < 0) {
 		gnutls_assert();
 		return result;

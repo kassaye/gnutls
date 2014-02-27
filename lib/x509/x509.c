@@ -714,9 +714,8 @@ gnutls_x509_crt_get_private_key_usage_period(gnutls_x509_crt_t cert,
 					     time_t * expiration,
 					     unsigned int *critical)
 {
-	int result, ret;
+	int ret;
 	gnutls_datum_t der = { NULL, 0 };
-	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 
 	if (cert == NULL) {
 		gnutls_assert();
@@ -734,32 +733,16 @@ gnutls_x509_crt_get_private_key_usage_period(gnutls_x509_crt_t cert,
 		    gnutls_assert_val
 		    (GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 
-	result = asn1_create_element
-	    (_gnutls_get_pkix(), "PKIX1.PrivateKeyUsagePeriod", &c2);
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_x509_ext_get_private_key_usage_period(&der, activation, expiration);
+	if (ret < 0) {
 		gnutls_assert();
-		ret = _gnutls_asn2err(result);
 		goto cleanup;
 	}
-
-	result = asn1_der_decoding(&c2, der.data, der.size, NULL);
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		ret = _gnutls_asn2err(result);
-		goto cleanup;
-	}
-
-	if (activation)
-		*activation = _gnutls_x509_get_time(c2, "notBefore", 1);
-
-	if (expiration)
-		*expiration = _gnutls_x509_get_time(c2, "notAfter", 1);
 
 	ret = 0;
 
       cleanup:
 	_gnutls_free_datum(&der);
-	asn1_delete_structure(&c2);
 
 	return ret;
 }
@@ -1070,9 +1053,11 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 	if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		gnutls_datum_t serial;
 		ret = gnutls_aki_get_cert_issuer(aki, 0, NULL, NULL, NULL, &serial);
-		if (ret >= 0)
-			return gnutls_assert_val(GNUTLS_E_X509_UNSUPPORTED_EXTENSION);
-		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+		if (ret >= 0) {
+			ret = gnutls_assert_val(GNUTLS_E_X509_UNSUPPORTED_EXTENSION);
+		} else {
+			ret = gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+		}
 	}
 
 	if (ret < 0) {
@@ -1675,15 +1660,10 @@ gnutls_x509_crt_get_basic_constraints(gnutls_x509_crt_t cert,
 		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 	}
 
-	result =
-	    _gnutls_x509_ext_extract_basicConstraints(&tmp_ca,
-						      pathlen,
-						      basicConstraints.
-						      data,
-						      basicConstraints.
-						      size);
+	result = gnutls_x509_ext_get_basic_constraints(&basicConstraints, &tmp_ca, pathlen);
 	if (ca)
 		*ca = tmp_ca;
+
 	_gnutls_free_datum(&basicConstraints);
 
 	if (result < 0) {

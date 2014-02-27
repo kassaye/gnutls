@@ -442,9 +442,7 @@ gnutls_x509_crt_set_basic_constraints(gnutls_x509_crt_t crt,
 
 	/* generate the extension.
 	 */
-	result =
-	    _gnutls_x509_ext_gen_basicConstraints(ca, pathLenConstraint,
-						  &der_data);
+	result = gnutls_x509_ext_set_basic_constraints(ca, pathLenConstraint, &der_data);
 	if (result < 0) {
 		gnutls_assert();
 		return result;
@@ -814,34 +812,14 @@ gnutls_x509_crt_set_private_key_usage_period(gnutls_x509_crt_t crt,
 {
 	int result;
 	gnutls_datum_t der_data;
-	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 
 	if (crt == NULL) {
 		gnutls_assert();
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
-	result =
-	    asn1_create_element(_gnutls_get_pkix(),
-				"PKIX1.PrivateKeyUsagePeriod", &c2);
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		return _gnutls_asn2err(result);
-	}
-
-	result = _gnutls_x509_set_time(c2, "notBefore", activation, 1);
-	if (result < 0) {
-		gnutls_assert();
-		goto cleanup;
-	}
-
-	result = _gnutls_x509_set_time(c2, "notAfter", expiration, 1);
-	if (result < 0) {
-		gnutls_assert();
-		goto cleanup;
-	}
-
-	result = _gnutls_x509_der_encode(c2, "", &der_data, 0);
+	result = gnutls_x509_ext_set_private_key_usage_period(activation,
+		expiration, &der_data);
 	if (result < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -854,9 +832,7 @@ gnutls_x509_crt_set_private_key_usage_period(gnutls_x509_crt_t crt,
 
 	crt->use_extensions = 1;
 
-      cleanup:
-	asn1_delete_structure(&c2);
-
+ cleanup:
 	return result;
 }
 

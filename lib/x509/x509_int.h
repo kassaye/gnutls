@@ -199,10 +199,6 @@ int _gnutls_x509_crt_get_extension(gnutls_x509_crt_t cert,
 int _gnutls_x509_crt_get_extension_oid(gnutls_x509_crt_t cert,
 				       int indx, void *ret,
 				       size_t * ret_size);
-int _gnutls_x509_ext_extract_basicConstraints(unsigned int *CA,
-					      int *pathLenConstraint,
-					      uint8_t * extnValue,
-					      int extnValueLen);
 int _gnutls_x509_crt_set_extension(gnutls_x509_crt_t cert,
 				   const char *extension_id,
 				   const gnutls_datum_t * ext_data,
@@ -222,8 +218,6 @@ _gnutls_write_general_name(ASN1_TYPE ext, const char *ext_name,
 		       gnutls_x509_subject_alt_name_t type,
 		       const void *data, unsigned int data_size);
 
-int _gnutls_x509_ext_gen_basicConstraints(int CA, int pathLenConstraint,
-					  gnutls_datum_t * der_ext);
 int _gnutls_x509_ext_gen_subject_alt_name(gnutls_x509_subject_alt_name_t
 					  type, const void *data,
 					  unsigned int data_size,
