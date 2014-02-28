@@ -1485,6 +1485,430 @@ int gnutls_x509_ext_set_proxy(int pathLenConstraint, const char *policyLanguage,
 
 }
 
+static int decode_user_notice(const void *data, size_t size,
+			      gnutls_datum_t * txt)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int ret, len;
+	char choice_type[64];
+	char name[128];
+	gnutls_datum_t td, utd;
+
+	ret = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.UserNotice", &c2);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = GNUTLS_E_PARSING_ERROR;
+		goto cleanup;
+	}
+
+	ret = asn1_der_decoding(&c2, data, size, NULL);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = GNUTLS_E_PARSING_ERROR;
+		goto cleanup;
+	}
+
+	len = sizeof(choice_type);
+	ret = asn1_read_value(c2, "explicitText", choice_type, &len);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = GNUTLS_E_PARSING_ERROR;
+		goto cleanup;
+	}
+
+	if (strcmp(choice_type, "utf8String") != 0
+	    && strcmp(choice_type, "IA5String") != 0
+	    && strcmp(choice_type, "bmpString") != 0
+	    && strcmp(choice_type, "visibleString") != 0) {
+		gnutls_assert();
+		ret = GNUTLS_E_PARSING_ERROR;
+		goto cleanup;
+	}
+
+	snprintf(name, sizeof(name), "explicitText.%s", choice_type);
+
+	ret = _gnutls_x509_read_value(c2, name, &td);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	if (strcmp(choice_type, "bmpString") == 0) {	/* convert to UTF-8 */
+		ret = _gnutls_ucs2_to_utf8(td.data, td.size, &utd);
+		_gnutls_free_datum(&td);
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+
+		td.data = utd.data;
+		td.size = utd.size;
+	} else {
+		/* _gnutls_x509_read_value allows that */
+		td.data[td.size] = 0;
+	}
+
+	txt->data = (void *) td.data;
+	txt->size = td.size;
+	ret = 0;
+
+      cleanup:
+	asn1_delete_structure(&c2);
+	return ret;
+
+}
+
+/**
+ * gnutls_x509_ext_get_policies:
+ * @ext: the DER encoded extension data
+ * @policies: A pointer to policy structures.
+ * @n_policies: will be updated with the number of exported policies.
+ *
+ * This function will extract the certificate policy extension (2.5.29.32) 
+ * and store it into a number of structures.
+ *
+ * The individual policies returned by this function must be deinitialized by using
+ * gnutls_x509_policy_release(). The @policies pointer must be free'd using
+ * gnutls_free().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_policy_st
+				 **policies, unsigned int *n_policies)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	char tmpstr[128];
+	char tmpoid[MAX_OID_SIZE];
+	gnutls_datum_t tmpd = { NULL, 0 };
+	int ret, len;
+	unsigned i, j, current = 0;
+
+	*policies = NULL;
+
+	ret = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.certificatePolicies", &c2);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(ret);
+		goto cleanup;
+	}
+
+	ret = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(ret);
+		goto cleanup;
+	}
+
+	for (j=0;;j++) {
+		*policies = gnutls_realloc_fast(*policies, (j+1)*sizeof(struct gnutls_x509_policy_st));
+		if (*policies == NULL) {
+			gnutls_assert();
+			ret = GNUTLS_E_MEMORY_ERROR;
+			goto full_cleanup;
+		}
+		memset(&(*policies)[j], 0, sizeof(struct gnutls_x509_policy_st));
+
+		/* create a string like "?1"
+		 */
+		snprintf(tmpstr, sizeof(tmpstr), "?%u.policyIdentifier", j+1);
+		current = j;
+
+		ret = _gnutls_x509_read_value(c2, tmpstr, &tmpd);
+		if (ret == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND)
+			break;
+
+		if (ret < 0) {
+			gnutls_assert();
+			goto full_cleanup;
+		}
+
+		(*policies)[j].oid = (void *) tmpd.data;
+		tmpd.data = NULL;
+
+		for (i = 0; i < GNUTLS_MAX_QUALIFIERS; i++) {
+			gnutls_datum_t td;
+
+			snprintf(tmpstr, sizeof(tmpstr),
+				 "?%u.policyQualifiers.?%u.policyQualifierId",
+				 j + 1, i + 1);
+
+			len = sizeof(tmpoid);
+			ret = asn1_read_value(c2, tmpstr, tmpoid, &len);
+
+			if (ret == ASN1_ELEMENT_NOT_FOUND)
+				break;	/* finished */
+
+			if (ret != ASN1_SUCCESS) {
+				gnutls_assert();
+				ret = _gnutls_asn2err(ret);
+				goto cleanup;
+			}
+
+			if (strcmp(tmpoid, "1.3.6.1.5.5.7.2.1") == 0) {
+				snprintf(tmpstr, sizeof(tmpstr),
+					 "?%u.policyQualifiers.?%u.qualifier",
+					 j+1, i + 1);
+
+				ret =
+				    _gnutls_x509_read_string(c2, tmpstr, &td,
+							     ASN1_ETYPE_IA5_STRING);
+				if (ret < 0) {
+					gnutls_assert();
+					goto full_cleanup;
+				}
+
+				(*policies)[j].qualifier[i].data = (void *) td.data;
+				(*policies)[j].qualifier[i].size = td.size;
+				td.data = NULL;
+				(*policies)[j].qualifier[i].type =
+				    GNUTLS_X509_QUALIFIER_URI;
+			} else if (strcmp(tmpoid, "1.3.6.1.5.5.7.2.2") == 0) {
+				gnutls_datum_t txt;
+
+				snprintf(tmpstr, sizeof(tmpstr),
+					 "?%u.policyQualifiers.?%u.qualifier",
+					 j+1, i + 1);
+
+				ret = _gnutls_x509_read_value(c2, tmpstr, &td);
+				if (ret < 0) {
+					gnutls_assert();
+					goto full_cleanup;
+				}
+
+				ret = decode_user_notice(td.data, td.size, &txt);
+				gnutls_free(td.data);
+				td.data = NULL;
+
+				if (ret < 0) {
+					gnutls_assert();
+					goto full_cleanup;
+				}
+
+				(*policies)[j].qualifier[i].data = (void *) txt.data;
+				(*policies)[j].qualifier[i].size = txt.size;
+				(*policies)[j].qualifier[i].type =
+				    GNUTLS_X509_QUALIFIER_NOTICE;
+			} else
+				(*policies)[j].qualifier[i].type =
+				    GNUTLS_X509_QUALIFIER_UNKNOWN;
+
+			(*policies)[j].qualifiers++;
+		}
+
+	}
+
+	*n_policies = j;
+
+	ret = 0;
+	goto cleanup;
+
+ full_cleanup:
+	for (j=0;j<current;j++)
+		gnutls_x509_policy_release(&(*policies)[j]);
+	gnutls_free((*policies));
+
+ cleanup:
+	_gnutls_free_datum(&tmpd);
+	asn1_delete_structure(&c2);
+	return ret;
+
+}
+
+static int encode_user_notice(const gnutls_datum_t * txt,
+			      gnutls_datum_t * der_data)
+{
+	int result;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+
+	if ((result =
+	     asn1_create_element(_gnutls_get_pkix(),
+				 "PKIX1.UserNotice",
+				 &c2)) != ASN1_SUCCESS) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto error;
+	}
+
+	/* delete noticeRef */
+	result = asn1_write_value(c2, "noticeRef", NULL, 0);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto error;
+	}
+
+	result = asn1_write_value(c2, "explicitText", "utf8String", 1);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto error;
+	}
+
+	result =
+	    asn1_write_value(c2, "explicitText.utf8String", txt->data,
+			     txt->size);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto error;
+	}
+
+	result = _gnutls_x509_der_encode(c2, "", der_data, 0);
+	if (result < 0) {
+		gnutls_assert();
+		goto error;
+	}
+
+	result = 0;
+
+      error:
+	asn1_delete_structure(&c2);
+	return result;
+
+}
+
+/**
+ * gnutls_x509_ext_set_policies:
+ * @policies: A pointer to policy structures.
+ * @n_policies: The number of policy structures
+ * @ext: will hold the DER encoded extension data
+ *
+ * This function will convert the provided policies, to a certificate policy
+ * DER encoded extension (2.5.29.32).
+ *
+ * The @ext data will be allocated using gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
+				 unsigned int n_policies, gnutls_datum_t * ext)
+{
+	int result;
+	unsigned i, j;
+	gnutls_datum_t der_data, tmpd;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	const char *oid;
+
+	result =
+	    asn1_create_element(_gnutls_get_pkix(),
+				"PKIX1.certificatePolicies", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	for (j=0;j<n_policies;j++) {
+		/* 1. write a new policy */
+		result = asn1_write_value(c2, "", "NEW", 1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		/* 2. Add the OID.
+		 */
+		result =
+		    asn1_write_value(c2, "?LAST.policyIdentifier", policies[j].oid, 1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		for (i = 0; i < MIN(policies[j].qualifiers, GNUTLS_MAX_QUALIFIERS);
+		     i++) {
+			result =
+			    asn1_write_value(c2, "?LAST.policyQualifiers", "NEW", 1);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				result = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			if (policies[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI)
+				oid = "1.3.6.1.5.5.7.2.1";
+			else if (policies[j].qualifier[i].type ==
+				 GNUTLS_X509_QUALIFIER_NOTICE)
+				oid = "1.3.6.1.5.5.7.2.2";
+			else {
+				result =
+				    gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+				goto cleanup;
+			}
+
+			result =
+			    asn1_write_value(c2,
+				     "?LAST.policyQualifiers.?LAST.policyQualifierId",
+				     oid, 1);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				result = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			if (policies[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI) {
+				tmpd.data = (void *) policies[j].qualifier[i].data;
+				tmpd.size = policies[j].qualifier[i].size;
+
+				result =
+				    _gnutls_x509_write_string(c2,
+						      "?LAST.policyQualifiers.?LAST.qualifier",
+						      &tmpd,
+						      ASN1_ETYPE_IA5_STRING);
+				if (result < 0) {
+					gnutls_assert();
+					goto cleanup;
+				}
+			} else if (policies[j].qualifier[i].type ==
+				   GNUTLS_X509_QUALIFIER_NOTICE) {
+				tmpd.data = (void *) policies[j].qualifier[i].data;
+				tmpd.size = policies[j].qualifier[i].size;
+
+				if (tmpd.size > 200) {
+					gnutls_assert();
+					result = GNUTLS_E_INVALID_REQUEST;
+					goto cleanup;
+				}
+
+				result = encode_user_notice(&tmpd, &der_data);
+				if (result < 0) {
+					gnutls_assert();
+					goto cleanup;
+				}
+
+				result =
+				    _gnutls_x509_write_value(c2,
+						     "?LAST.policyQualifiers.?LAST.qualifier",
+						     &der_data);
+				_gnutls_free_datum(&der_data);
+				if (result < 0) {
+					gnutls_assert();
+					goto cleanup;
+				}
+			}
+		}
+	}
+
+	result = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (result < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+      cleanup:
+	asn1_delete_structure(&c2);
+
+	return result;
+}
+
 #if 0
 
 typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
@@ -1520,8 +1944,4 @@ int gnutls_x509_ext_set_authority_info_access(gnutls_aia_t aia,
 					      gnutls_datum_t * ext);
 
 
-int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_policy_st
-				 **policy, unsigned int *max_policies);
-int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
-				 unsigned int n_policies, gnutls_datum_t * ext);
 #endif
