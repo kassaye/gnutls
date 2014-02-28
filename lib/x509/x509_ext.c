@@ -1310,6 +1310,181 @@ int gnutls_x509_ext_set_basic_constraints(unsigned int ca, int pathlen,
 
 }
 
+/**
+ * gnutls_x509_ext_get_proxy:
+ * @ext: the DER encoded extension data
+ * @pathlen: pointer to output integer indicating path length (may be
+ *   NULL), non-negative error codes indicate a present pCPathLenConstraint
+ *   field and the actual value, -1 indicate that the field is absent.
+ * @policyLanguage: output variable with OID of policy language
+ * @policy: output variable with policy data
+ * @sizeof_policy: output variable size of policy data
+ *
+ * This function will return the information from a proxy certificate
+ * extension. It reads the ProxyCertInfo X.509 extension (1.3.6.1.5.5.7.1.14).
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a
+ *   negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
+			      char **policyLanguage, char **policy,
+			      size_t * sizeof_policy)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int result;
+	gnutls_datum_t value = {NULL, 0};
+
+	if ((result = asn1_create_element
+	     (_gnutls_get_pkix(), "PKIX1.ProxyCertInfo",
+	      &c2)) != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	if (pathlen) {
+		result = _gnutls_x509_read_uint(c2, "pCPathLenConstraint",
+						(unsigned int *)
+						pathlen);
+		if (result == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND)
+			*pathlen = -1;
+		else if (result != GNUTLS_E_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+	}
+
+	result = _gnutls_x509_read_value(c2, "proxyPolicy.policyLanguage",
+					 &value);
+	if (result < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	if (policyLanguage) {
+		*policyLanguage = (char*) value.data;
+	} else {
+		gnutls_free(value.data);
+		value.data = NULL;
+	}
+
+	result =
+	    _gnutls_x509_read_value(c2, "proxyPolicy.policy", &value);
+	if (result == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND) {
+		if (policy)
+			*policy = NULL;
+		if (sizeof_policy)
+			*sizeof_policy = 0;
+	} else if (result < 0) {
+		gnutls_assert();
+		goto cleanup;
+	} else {
+		if (policy) {
+			*policy = (char *) value.data;
+		}
+		if (sizeof_policy)
+			*sizeof_policy = value.size;
+	}
+
+	result = 0;
+ cleanup:
+	gnutls_free(value.data);
+	asn1_delete_structure(&c2);
+
+	return result;
+}
+
+/**
+ * gnutls_x509_ext_set_proxy:
+ * @pathLenConstraint: non-negative error codes indicate maximum length of path,
+ *   and negative error codes indicate that the pathLenConstraints field should
+ *   not be present.
+ * @policyLanguage: OID describing the language of @policy.
+ * @policy: uint8_t byte array with policy language, can be %NULL
+ * @sizeof_policy: size of @policy.
+ * @ext: will hold the DER encoded extension data
+ *
+ * This function will convert the parameters provided to a proxyCertInfo extension.
+ *
+ * The @ext data will be allocated using
+ * gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a
+ *   negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_proxy(int pathLenConstraint, const char *policyLanguage,
+			      const char *policy, size_t sizeof_policy,
+			      gnutls_datum_t * ext)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int result;
+
+	result = asn1_create_element(_gnutls_get_pkix(),
+				     "PKIX1.ProxyCertInfo", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	if (pathLenConstraint < 0) {
+		result =
+		    asn1_write_value(c2, "pCPathLenConstraint", NULL, 0);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+	} else {
+		result =
+		    _gnutls_x509_write_uint32(c2, "pCPathLenConstraint",
+					      pathLenConstraint);
+
+		if (result < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+	}
+
+	result = asn1_write_value(c2, "proxyPolicy.policyLanguage",
+				  policyLanguage, 1);
+	if (result < 0) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	result = asn1_write_value(c2, "proxyPolicy.policy",
+				  policy, sizeof_policy);
+	if (result < 0) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	result = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (result < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	result = 0;
+ cleanup:
+	asn1_delete_structure(&c2);
+	return result;
+
+}
+
 #if 0
 
 typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
@@ -1344,12 +1519,6 @@ int gnutls_x509_ext_get_authority_info_access(const gnutls_datum_t * ext,
 int gnutls_x509_ext_set_authority_info_access(gnutls_aia_t aia,
 					      gnutls_datum_t * ext);
 
-int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
-			      char **policyLanguage, char **policy,
-			      size_t * sizeof_policy);
-int gnutls_x509_ext_set_proxy(int pathLenConstraint, const char *policyLanguage,
-			      const char *policy, size_t sizeof_policy,
-			      gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_policy_st
 				 **policy, unsigned int *max_policies);

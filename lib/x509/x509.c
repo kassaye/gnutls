@@ -1799,13 +1799,10 @@ gnutls_x509_crt_get_proxy(gnutls_x509_crt_t cert,
 		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 	}
 
-	result = _gnutls_x509_ext_extract_proxyCertInfo(pathlen,
+	result = gnutls_x509_ext_get_proxy(&proxyCertInfo, pathlen,
 							policyLanguage,
 							policy,
-							sizeof_policy,
-							proxyCertInfo.data,
-							proxyCertInfo.
-							size);
+							sizeof_policy);
 	_gnutls_free_datum(&proxyCertInfo);
 	if (result < 0) {
 		gnutls_assert();

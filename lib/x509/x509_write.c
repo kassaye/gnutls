@@ -770,10 +770,10 @@ gnutls_x509_crt_set_proxy(gnutls_x509_crt_t crt,
 
 	/* generate the extension.
 	 */
-	result = _gnutls_x509_ext_gen_proxyCertInfo(pathLenConstraint,
-						    policyLanguage,
-						    policy, sizeof_policy,
-						    &der_data);
+	result = gnutls_x509_ext_set_proxy(pathLenConstraint,
+					    policyLanguage,
+					    policy, sizeof_policy,
+					    &der_data);
 	if (result < 0) {
 		gnutls_assert();
 		return result;

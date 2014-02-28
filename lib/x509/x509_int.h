@@ -230,17 +230,6 @@ int _gnutls_x509_ext_gen_crl_dist_points(gnutls_x509_subject_alt_name_t
 					 gnutls_datum_t * der_ext);
 int _gnutls_x509_ext_gen_auth_key_id(const void *id, size_t id_size,
 				     gnutls_datum_t * der_data);
-int _gnutls_x509_ext_extract_proxyCertInfo(int *pathLenConstraint,
-					   char **policyLanguage,
-					   char **policy,
-					   size_t * sizeof_policy,
-					   uint8_t * extnValue,
-					   int extnValueLen);
-int _gnutls_x509_ext_gen_proxyCertInfo(int pathLenConstraint,
-				       const char *policyLanguage,
-				       const char *policy,
-				       size_t sizeof_policy,
-				       gnutls_datum_t * der_ext);
 
 /* mpi.c */
 int _gnutls_x509_crq_get_mpis(gnutls_x509_crq_t cert,
