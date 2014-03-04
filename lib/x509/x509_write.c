@@ -1591,49 +1591,48 @@ gnutls_x509_crt_set_authority_info_access(gnutls_x509_crt_t crt,
  **/
 int
 gnutls_x509_crt_set_policy(gnutls_x509_crt_t crt,
-			   struct gnutls_x509_policy_st *policy,
+			   const struct gnutls_x509_policy_st *policy,
 			   unsigned int critical)
 {
 	int ret;
 	gnutls_datum_t der_data = {NULL, 0}, prev_der_data = { NULL, 0 };
-	struct gnutls_x509_policy_st * policies = NULL;
-	unsigned int n_policies = 0;
+	gnutls_x509_policies_t policies = NULL;
 
 	if (crt == NULL) {
 		gnutls_assert();
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
-	ret = _gnutls_x509_crt_get_extension(crt, "2.5.29.32", 0,
-						&prev_der_data, NULL);
-	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+	ret = gnutls_x509_policies_init(&policies);
+	if (ret < 0) {
 		gnutls_assert();
 		return ret;
 	}
 
+	ret = _gnutls_x509_crt_get_extension(crt, "2.5.29.32", 0,
+						&prev_der_data, NULL);
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+
 	if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		ret = gnutls_x509_ext_get_policies(&prev_der_data,
-			&policies, &n_policies);
+			policies);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
 		}
-
-		policies = gnutls_realloc_fast(policies, (n_policies+1)*sizeof(struct gnutls_x509_policy_st));
-	} else {
-		policies = gnutls_malloc(sizeof(struct gnutls_x509_policy_st));
 	}
 
-	if (policies == NULL) {
+	ret = gnutls_x509_policies_set(policies, policy);
+	if (ret < 0) {
 		gnutls_assert();
-		ret = GNUTLS_E_MEMORY_ERROR;
 		goto cleanup;
 	}
 
-	memcpy(&policies[n_policies], policy, sizeof(struct gnutls_x509_policy_st));
-	n_policies++;
-
-	ret = gnutls_x509_ext_set_policies(policies, n_policies, &der_data);
+	ret = gnutls_x509_ext_set_policies(policies, &der_data);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1642,12 +1641,13 @@ gnutls_x509_crt_set_policy(gnutls_x509_crt_t crt,
 	ret = _gnutls_x509_crt_set_extension(crt, "2.5.29.32",
 						&der_data, 0);
 
-	_gnutls_free_datum(&der_data);
-
 	crt->use_extensions = 1;
 
  cleanup:
+ 	if (policies != NULL)
+	 	gnutls_x509_policies_deinit(policies);
 	_gnutls_free_datum(&prev_der_data);
+	_gnutls_free_datum(&der_data);
 
 	return ret;
 }

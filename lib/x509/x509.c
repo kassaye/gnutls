@@ -1855,10 +1855,8 @@ gnutls_x509_crt_get_policy(gnutls_x509_crt_t crt, int indx,
 			   unsigned int *critical)
 {
 	gnutls_datum_t tmpd = { NULL, 0 };
-	int ret, avoid = -1;
-	struct gnutls_x509_policy_st *policies;
-	unsigned int n_policies = 0;
-	unsigned i;
+	int ret;
+	gnutls_x509_policies_t policies = NULL;
 
 	if (crt == NULL) {
 		gnutls_assert();
@@ -1867,46 +1865,43 @@ gnutls_x509_crt_get_policy(gnutls_x509_crt_t crt, int indx,
 
 	memset(policy, 0, sizeof(*policy));
 
+	ret = gnutls_x509_policies_init(&policies);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
 	if ((ret =
 	     _gnutls_x509_crt_get_extension(crt, "2.5.29.32", 0, &tmpd,
 					    critical)) < 0) {
-		return ret;
-	}
-
-	if (tmpd.size == 0 || tmpd.data == NULL) {
-		gnutls_assert();
-		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
-	}
-
-	ret = gnutls_x509_ext_get_policies(&tmpd, &policies, &n_policies);
-	if (ret < 0) {
-		gnutls_assert();
 		goto cleanup;
 	}
 
-	if (n_policies == 0 ||
-		(n_policies > 0 &&
-		(unsigned)indx >= n_policies)) {
+	if (tmpd.size == 0 || tmpd.data == NULL) {
 		gnutls_assert();
 		ret = GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 		goto cleanup;
 	}
 
-	memcpy(policy, &policies[indx], sizeof(struct gnutls_x509_policy_st));
-	avoid = indx;
+	ret = gnutls_x509_ext_get_policies(&tmpd, policies);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = gnutls_x509_policies_get(policies, indx, policy);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	_gnutls_x509_policies_erase(policies, indx);
 
 	ret = 0;
 
  cleanup:
+ 	if (policies != NULL)
+ 		gnutls_x509_policies_deinit(policies);
 	_gnutls_free_datum(&tmpd);
-	if (n_policies > 0) {
-		for (i=0;i<n_policies;i++) {
-			if ((int)i==avoid)
-				continue;
-			gnutls_x509_policy_release(&policies[i]);
-		}
-		gnutls_free(policies);
-	}
+
 	return ret;
 }
 

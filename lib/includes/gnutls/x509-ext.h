@@ -144,10 +144,19 @@ int gnutls_x509_ext_set_proxy(int pathLenConstraint, const char *policyLanguage,
 			      const char *policy, size_t sizeof_policy,
 			      gnutls_datum_t * ext);
 
-int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_policy_st
-				 **policy, unsigned int *max_policies);
-int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
-				 unsigned int n_policies,
+typedef struct gnutls_x509_policies_st *gnutls_x509_policies_t;
+
+int gnutls_x509_policies_init(gnutls_x509_policies_t *);
+void gnutls_x509_policies_deinit(gnutls_x509_policies_t);
+
+int gnutls_x509_policies_get(gnutls_x509_policies_t policies, unsigned int seq,
+				 struct gnutls_x509_policy_st *policy);
+int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
+				 const struct gnutls_x509_policy_st *policy);
+
+int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policies_t
+				 policies);
+int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 				 gnutls_datum_t * ext);
 
 

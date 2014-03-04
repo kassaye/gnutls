@@ -1559,11 +1559,132 @@ static int decode_user_notice(const void *data, size_t size,
 
 }
 
+struct gnutls_x509_policies_st {
+	struct gnutls_x509_policy_st policy[MAX_ENTRIES];
+	unsigned int size;
+};
+
+/**
+ * gnutls_x509_policies_init:
+ * @policies: The authority key ID structure
+ *
+ * This function will initialize an authority key ID structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_policies_init(gnutls_x509_policies_t * policies)
+{
+	*policies = gnutls_calloc(1, sizeof(struct gnutls_x509_policies_st));
+	if (*policies == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+
+	return 0;
+}
+
+/**
+ * gnutls_x509_policies_deinit:
+ * @policies: The authority key identifier structure
+ *
+ * This function will deinitialize an authority key identifier structure.
+ *
+ * Since: 3.3.0
+ **/
+void gnutls_x509_policies_deinit(gnutls_x509_policies_t policies)
+{
+unsigned i;
+
+	for (i=0;i<policies->size;i++)
+		gnutls_x509_policy_release(&policies->policy[i]);
+	gnutls_free(policies);
+}
+
+/**
+ * gnutls_x509_policies_get:
+ * @policies: The policies structure
+ * @seq: The index of the name to get
+ * @policy: Will hold the policy
+ *
+ * This function will return a specific policy as stored in
+ * the @policies structure. The returned values should be treated as constant
+ * and valid for the lifetime of @policies.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the index is out of bounds, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_policies_get(gnutls_x509_policies_t policies,
+				 unsigned int seq, 
+				 struct gnutls_x509_policy_st *policy)
+{
+	if (seq >= policies->size)
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+
+	if (policy) {
+		memcpy(policy, &policies->policy[seq], sizeof(struct gnutls_x509_policy_st));
+	}
+
+	return 0;
+}
+
+void _gnutls_x509_policies_erase(gnutls_x509_policies_t policies, unsigned int seq)
+{
+	if (seq >= policies->size)
+		return;
+
+	memset(&policies->policy[seq], 0, sizeof(struct gnutls_x509_policy_st));
+}
+
+
+
+/**
+ * gnutls_x509_policies_set:
+ * @policies: An initialized policies structure
+ * @seq: The index of the name to get
+ * @policy: Contains the policy to set
+ *
+ * This function will store the specified policy in
+ * the provided @policies structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0), otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
+				 const struct gnutls_x509_policy_st * policy)
+{
+	unsigned i;
+
+	if (policies->size + 1 > MAX_ENTRIES)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	policies->policy[policies->size].oid = gnutls_strdup(policy->oid);
+	if (policies->policy[policies->size].oid == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+
+	for (i=0;i<policy->qualifiers;i++) {
+		policies->policy[policies->size].qualifier[i].type = policy->qualifier[i].type;
+		policies->policy[policies->size].qualifier[i].size = policy->qualifier[i].size;
+		policies->policy[policies->size].qualifier[i].data = gnutls_malloc(policy->qualifier[i].size+1);
+		if (policies->policy[policies->size].qualifier[i].data == NULL)
+			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+		memcpy(policies->policy[policies->size].qualifier[i].data, policy->qualifier[i].data,
+			policy->qualifier[i].size);
+		policies->policy[policies->size].qualifier[i].data[policy->qualifier[i].size] = 0;
+	}
+
+	policies->policy[policies->size].qualifiers = policy->qualifiers;
+	policies->size++;
+
+	return 0;
+}
+
 /**
  * gnutls_x509_ext_get_policies:
  * @ext: the DER encoded extension data
- * @policies: A pointer to policy structures.
- * @n_policies: will be updated with the number of exported policies.
+ * @policies: A pointer to an initialized policies structures.
  *
  * This function will extract the certificate policy extension (2.5.29.32) 
  * and store it into a number of structures.
@@ -1576,8 +1697,8 @@ static int decode_user_notice(const void *data, size_t size,
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_policy_st
-				 **policies, unsigned int *n_policies)
+int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policies_t
+				 policies)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	char tmpstr[128];
@@ -1585,8 +1706,6 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_
 	gnutls_datum_t tmpd = { NULL, 0 };
 	int ret, len;
 	unsigned i, j, current = 0;
-
-	*policies = NULL;
 
 	ret = asn1_create_element
 	    (_gnutls_get_pkix(), "PKIX1.certificatePolicies", &c2);
@@ -1604,13 +1723,10 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_
 	}
 
 	for (j=0;;j++) {
-		*policies = gnutls_realloc_fast(*policies, (j+1)*sizeof(struct gnutls_x509_policy_st));
-		if (*policies == NULL) {
-			gnutls_assert();
-			ret = GNUTLS_E_MEMORY_ERROR;
-			goto full_cleanup;
-		}
-		memset(&(*policies)[j], 0, sizeof(struct gnutls_x509_policy_st));
+		if (j >= MAX_ENTRIES)
+			break;
+
+		memset(&policies->policy[j], 0, sizeof(struct gnutls_x509_policy_st));
 
 		/* create a string like "?1"
 		 */
@@ -1626,7 +1742,7 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_
 			goto full_cleanup;
 		}
 
-		(*policies)[j].oid = (void *) tmpd.data;
+		policies->policy[j].oid = (void *) tmpd.data;
 		tmpd.data = NULL;
 
 		for (i = 0; i < GNUTLS_MAX_QUALIFIERS; i++) {
@@ -1661,10 +1777,10 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_
 					goto full_cleanup;
 				}
 
-				(*policies)[j].qualifier[i].data = (void *) td.data;
-				(*policies)[j].qualifier[i].size = td.size;
+				policies->policy[j].qualifier[i].data = (void *) td.data;
+				policies->policy[j].qualifier[i].size = td.size;
 				td.data = NULL;
-				(*policies)[j].qualifier[i].type =
+				policies->policy[j].qualifier[i].type =
 				    GNUTLS_X509_QUALIFIER_URI;
 			} else if (strcmp(tmpoid, "1.3.6.1.5.5.7.2.2") == 0) {
 				gnutls_datum_t txt;
@@ -1688,28 +1804,27 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, struct gnutls_x509_
 					goto full_cleanup;
 				}
 
-				(*policies)[j].qualifier[i].data = (void *) txt.data;
-				(*policies)[j].qualifier[i].size = txt.size;
-				(*policies)[j].qualifier[i].type =
+				policies->policy[j].qualifier[i].data = (void *) txt.data;
+				policies->policy[j].qualifier[i].size = txt.size;
+				policies->policy[j].qualifier[i].type =
 				    GNUTLS_X509_QUALIFIER_NOTICE;
 			} else
-				(*policies)[j].qualifier[i].type =
+				policies->policy[j].qualifier[i].type =
 				    GNUTLS_X509_QUALIFIER_UNKNOWN;
 
-			(*policies)[j].qualifiers++;
+			policies->policy[j].qualifiers++;
 		}
 
 	}
 
-	*n_policies = j;
+	policies->size = j;
 
 	ret = 0;
 	goto cleanup;
 
  full_cleanup:
 	for (j=0;j<current;j++)
-		gnutls_x509_policy_release(&(*policies)[j]);
-	gnutls_free((*policies));
+		gnutls_x509_policy_release(&policies->policy[j]);
 
  cleanup:
 	_gnutls_free_datum(&tmpd);
@@ -1773,8 +1888,7 @@ static int encode_user_notice(const gnutls_datum_t * txt,
 
 /**
  * gnutls_x509_ext_set_policies:
- * @policies: A pointer to policy structures.
- * @n_policies: The number of policy structures
+ * @policies: A pointer to an initialized policies structure.
  * @ext: will hold the DER encoded extension data
  *
  * This function will convert the provided policies, to a certificate policy
@@ -1786,8 +1900,8 @@ static int encode_user_notice(const gnutls_datum_t * txt,
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
-				 unsigned int n_policies, gnutls_datum_t * ext)
+int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
+				 gnutls_datum_t * ext)
 {
 	int result;
 	unsigned i, j;
@@ -1804,7 +1918,7 @@ int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
 		goto cleanup;
 	}
 
-	for (j=0;j<n_policies;j++) {
+	for (j=0;j<policies->size;j++) {
 		/* 1. write a new policy */
 		result = asn1_write_value(c2, "", "NEW", 1);
 		if (result != ASN1_SUCCESS) {
@@ -1816,14 +1930,14 @@ int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
 		/* 2. Add the OID.
 		 */
 		result =
-		    asn1_write_value(c2, "?LAST.policyIdentifier", policies[j].oid, 1);
+		    asn1_write_value(c2, "?LAST.policyIdentifier", policies->policy[j].oid, 1);
 		if (result != ASN1_SUCCESS) {
 			gnutls_assert();
 			result = _gnutls_asn2err(result);
 			goto cleanup;
 		}
 
-		for (i = 0; i < MIN(policies[j].qualifiers, GNUTLS_MAX_QUALIFIERS);
+		for (i = 0; i < MIN(policies->policy[j].qualifiers, GNUTLS_MAX_QUALIFIERS);
 		     i++) {
 			result =
 			    asn1_write_value(c2, "?LAST.policyQualifiers", "NEW", 1);
@@ -1833,9 +1947,9 @@ int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
 				goto cleanup;
 			}
 
-			if (policies[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI)
+			if (policies->policy[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI)
 				oid = "1.3.6.1.5.5.7.2.1";
-			else if (policies[j].qualifier[i].type ==
+			else if (policies->policy[j].qualifier[i].type ==
 				 GNUTLS_X509_QUALIFIER_NOTICE)
 				oid = "1.3.6.1.5.5.7.2.2";
 			else {
@@ -1854,10 +1968,9 @@ int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
 				goto cleanup;
 			}
 
-			if (policies[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI) {
-				tmpd.data = (void *) policies[j].qualifier[i].data;
-				tmpd.size = policies[j].qualifier[i].size;
-
+			if (policies->policy[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI) {
+				tmpd.data = (void *) policies->policy[j].qualifier[i].data;
+				tmpd.size = policies->policy[j].qualifier[i].size;
 				result =
 				    _gnutls_x509_write_string(c2,
 						      "?LAST.policyQualifiers.?LAST.qualifier",
@@ -1867,10 +1980,10 @@ int gnutls_x509_ext_set_policies(struct gnutls_x509_policy_st *policies,
 					gnutls_assert();
 					goto cleanup;
 				}
-			} else if (policies[j].qualifier[i].type ==
+			} else if (policies->policy[j].qualifier[i].type ==
 				   GNUTLS_X509_QUALIFIER_NOTICE) {
-				tmpd.data = (void *) policies[j].qualifier[i].data;
-				tmpd.size = policies[j].qualifier[i].size;
+				tmpd.data = (void *) policies->policy[j].qualifier[i].data;
+				tmpd.size = policies->policy[j].qualifier[i].size;
 
 				if (tmpd.size > 200) {
 					gnutls_assert();

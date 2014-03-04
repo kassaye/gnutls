@@ -24,6 +24,7 @@
 #define X509_H
 
 #include <gnutls/x509.h>
+#include <gnutls/x509-ext.h>
 #include <gnutls/abstract.h>
 
 #include <libtasn1.h>
@@ -397,4 +398,7 @@ typedef struct name_constraints_node_st {
 
 int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
 				    name_constraints_node_st ** _nc);
+
+void _gnutls_x509_policies_erase(gnutls_x509_policies_t policies, unsigned int seq);
+
 #endif

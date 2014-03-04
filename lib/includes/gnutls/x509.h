@@ -426,7 +426,7 @@ void gnutls_x509_policy_release(struct gnutls_x509_policy_st
 				*policy);
 int gnutls_x509_crt_get_policy(gnutls_x509_crt_t crt, int indx, struct gnutls_x509_policy_st
 			       *policy, unsigned int *critical);
-int gnutls_x509_crt_set_policy(gnutls_x509_crt_t crt, struct gnutls_x509_policy_st
+int gnutls_x509_crt_set_policy(gnutls_x509_crt_t crt, const struct gnutls_x509_policy_st
 			       *policy, unsigned int critical);
 
 int gnutls_x509_dn_oid_known(const char *oid);
