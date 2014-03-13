@@ -31,11 +31,15 @@
 #include <c-ctype.h>
 #include <gnutls/x509-ext.h>
 
+struct name_st {
+	unsigned int type;
+	gnutls_datum_t san;
+	gnutls_datum_t othername_oid;
+};
+
 #define MAX_ENTRIES 64
 struct gnutls_subject_alt_names_st {
-	unsigned int type[MAX_ENTRIES];
-	gnutls_datum_t san[MAX_ENTRIES];
-	gnutls_datum_t othername_oid[MAX_ENTRIES];
+	struct name_st *names;
 	unsigned int size;
 };
 
@@ -65,9 +69,10 @@ static void subject_alt_names_deinit(gnutls_subject_alt_names_t sans)
 	unsigned int i;
 
 	for (i = 0; i < sans->size; i++) {
-		gnutls_free(sans->san[i].data);
-		gnutls_free(sans->othername_oid[i].data);
+		gnutls_free(sans->names[i].san.data);
+		gnutls_free(sans->names[i].othername_oid.data);
 	}
+	gnutls_free(sans->names);
 }
 
 /**
@@ -110,17 +115,52 @@ int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t sans,
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 
 	if (san) {
-		memcpy(san, &sans->san[seq], sizeof(gnutls_datum_t));
+		memcpy(san, &sans->names[seq].san, sizeof(gnutls_datum_t));
 	}
 
 	if (san_type)
-		*san_type = sans->type[seq];
+		*san_type = sans->names[seq].type;
 
-	if (sans->type[seq] == GNUTLS_SAN_OTHERNAME) {
-		othername_oid->data = sans->othername_oid[seq].data;
-		othername_oid->size = sans->othername_oid[seq].size;
+	if (sans->names[seq].type == GNUTLS_SAN_OTHERNAME) {
+		othername_oid->data = sans->names[seq].othername_oid.data;
+		othername_oid->size = sans->names[seq].othername_oid.size;
 	}
 
+	return 0;
+}
+
+/* This is the same as gnutls_subject_alt_names_set() but will not
+ * copy the strings */
+static
+int subject_alt_names_set(struct name_st **names,
+			  unsigned int *size,
+			  unsigned int san_type,
+			  const gnutls_datum_t * san,
+			  char *othername_oid)
+{
+	void *tmp;
+
+	tmp = gnutls_realloc(*names, (*size + 1)*sizeof((*names)[0]));
+	if (tmp == NULL) {
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+	}
+	*names = tmp;
+
+	(*names)[*size].type = san_type;
+	(*names)[*size].san.data = san->data;
+	(*names)[*size].san.size = san->size;
+
+	if (othername_oid) {
+		(*names)[*size].othername_oid.data =
+			(uint8_t*)othername_oid;
+		(*names)[*size].othername_oid.size = 
+			strlen(othername_oid);
+	} else {
+		(*names)[*size].othername_oid.data = NULL;
+		(*names)[*size].othername_oid.size = 0;
+	}
+
+	(*size)++;
 	return 0;
 }
 
@@ -144,27 +184,24 @@ int gnutls_subject_alt_names_set(gnutls_subject_alt_names_t sans,
 				 const char *othername_oid)
 {
 	int ret;
+	gnutls_datum_t copy;
+	char *ooc;
 
-	if (sans->size + 1 > MAX_ENTRIES)
-		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
-
-	sans->type[sans->size] = san_type;
-
-	ret = _gnutls_set_datum(&sans->san[sans->size], san->data, san->size);
+	ret = _gnutls_set_datum(&copy, san->data, san->size);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
-	if (othername_oid) {
-		sans->othername_oid[sans->size].data =
-		    (uint8_t *) gnutls_strdup(othername_oid);
-		if (sans->othername_oid[sans->size].data == NULL) {
-			gnutls_free(sans->san[sans->size].data);
-			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-		}
-		sans->othername_oid[sans->size].size = strlen(othername_oid);
+	if (othername_oid != NULL)
+		ooc = gnutls_strdup(othername_oid);
+	else
+		ooc = NULL;
+	ret = subject_alt_names_set(&sans->names, &sans->size,
+		san_type, &copy, ooc);
+	if (ret < 0) {
+		gnutls_free(copy.data);
+		return gnutls_assert_val(ret);
 	}
 
-	sans->size++;
 	return 0;
 }
 
@@ -190,6 +227,8 @@ int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	int result, ret;
 	unsigned int i;
+	gnutls_datum_t san, othername_oid;
+	unsigned type;
 
 	result =
 	    asn1_create_element(_gnutls_get_pkix(), "PKIX1.GeneralNames", &c2);
@@ -207,26 +246,35 @@ int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
 
 	i = 0;
 	do {
+		san.data = NULL;
+		othername_oid.data = NULL;
+
 		ret =
-		    _gnutls_parse_general_name2(c2, "", i, &sans->san[i],
-						&sans->type[i], 0);
+		    _gnutls_parse_general_name2(c2, "", i, &san, &type, 0);
 		if (ret < 0)
 			break;
 
-		if (sans->type[i] == GNUTLS_SAN_OTHERNAME) {
+		if (type == GNUTLS_SAN_OTHERNAME) {
 			ret =
 			    _gnutls_parse_general_name2(c2, "", i,
-							&sans->othername_oid[i],
+							&othername_oid,
 							NULL, 1);
 			if (ret < 0)
 				break;
 		}
 
+		ret = subject_alt_names_set(&sans->names, &sans->size,
+			type, &san, (char*)othername_oid.data);
+		if (ret < 0)
+			break;
+
 		i++;
-	} while (ret >= 0 && i < MAX_ENTRIES);
+	} while (ret >= 0);
 
 	sans->size = i;
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		gnutls_free(san.data);
+		gnutls_free(othername_oid.data);
 		gnutls_assert();
 		goto cleanup;
 	}
@@ -254,7 +302,7 @@ int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t sans,
 					  gnutls_datum_t * ext)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
-	int result;
+	int result, ret;
 	unsigned i;
 
 	result =
@@ -265,26 +313,30 @@ int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t sans,
 	}
 
 	for (i = 0; i < sans->size; i++) {
-		result = _gnutls_write_new_general_name(c2, "", sans->type[i],
-							sans->san[i].data,
-							sans->san[i].size);
-		if (result < 0) {
+		if (sans->names[i].type == GNUTLS_SAN_OTHERNAME) {
+			ret = gnutls_assert_val(GNUTLS_E_UNIMPLEMENTED_FEATURE);
+			goto cleanup;
+		}
+		ret = _gnutls_write_new_general_name(c2, "", sans->names[i].type,
+							sans->names[i].san.data,
+							sans->names[i].san.size);
+		if (ret < 0) {
 			gnutls_assert();
-			asn1_delete_structure(&c2);
-			return result;
+			goto cleanup;
 		}
 	}
 
-	result = _gnutls_x509_der_encode(c2, "", ext, 0);
-
-	asn1_delete_structure(&c2);
-
-	if (result < 0) {
+	ret = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (ret < 0) {
 		gnutls_assert();
-		return result;
+		goto cleanup;
 	}
 
-	return 0;
+	ret = 0;
+
+ cleanup:
+	asn1_delete_structure(&c2);
+	return ret;
 }
 
 /**
@@ -684,36 +736,34 @@ int gnutls_aki_set_cert_issuer(gnutls_aki_t aki,
 			       const gnutls_datum_t * serial)
 {
 	int ret;
-
-	if (aki->cert_issuer.size + 1 > MAX_ENTRIES)
-		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+	gnutls_datum_t t_san, t_othername_oid = {NULL, 0};
 
 	ret = _gnutls_set_datum(&aki->serial, serial->data, serial->size);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
-	aki->cert_issuer.type[aki->cert_issuer.size] = san_type;
+	aki->cert_issuer.names[aki->cert_issuer.size].type = san_type;
 
 	ret =
-	    _gnutls_set_datum(&aki->cert_issuer.san[aki->cert_issuer.size],
-			      san->data, san->size);
+	    _gnutls_set_datum(&t_san, san->data, san->size);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
 	if (othername_oid) {
-		aki->cert_issuer.othername_oid[aki->cert_issuer.size].data =
-		    (uint8_t *) gnutls_strdup(othername_oid);
-		if (aki->cert_issuer.othername_oid[aki->cert_issuer.size].
-		    data == NULL) {
-			gnutls_free(aki->cert_issuer.san[aki->cert_issuer.size].
-				    data);
+		t_othername_oid.data = (uint8_t *) gnutls_strdup(othername_oid);
+		if (t_othername_oid.data == NULL) {
+			gnutls_free(t_san.data);
 			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 		}
-		aki->cert_issuer.othername_oid[aki->cert_issuer.size].size =
-		    strlen(othername_oid);
+		t_othername_oid.size = strlen(othername_oid);
 	}
 
-	aki->cert_issuer.size++;
+	ret = subject_alt_names_set(&aki->cert_issuer.names, &aki->cert_issuer.size,
+		san_type, &t_san, (char*)t_othername_oid.data);
+	if (ret < 0) {
+		gnutls_assert();
+		return ret;
+	}
 
 	return 0;
 }
@@ -723,7 +773,7 @@ int gnutls_aki_set_cert_issuer(gnutls_aki_t aki,
  * @aki: The authority key ID structure
  * @seq: The index of the name to get
  * @san_type: Will hold the type of the name (of %gnutls_subject_alt_names_t), may be null
- * @san: The alternative name data (may be null)
+ * @san: The alternative name data (may be null and should be treated as constant)
  * @othername_oid: The object identifier if @san_type is %GNUTLS_SAN_OTHERNAME (should be treated as constant)
  * @serial: The authorityCertSerialNumber number (may be null)
  *
@@ -750,17 +800,17 @@ int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
 		memcpy(serial, &aki->serial, sizeof(gnutls_datum_t));
 
 	if (san) {
-		memcpy(san, &aki->cert_issuer.san[seq], sizeof(gnutls_datum_t));
+		memcpy(san, &aki->cert_issuer.names[seq].san, sizeof(gnutls_datum_t));
 	}
 
 	if (othername_oid != NULL
-	    && aki->cert_issuer.type[seq] == GNUTLS_SAN_OTHERNAME) {
-		othername_oid->data = aki->cert_issuer.othername_oid[seq].data;
-		othername_oid->size = aki->cert_issuer.othername_oid[seq].size;
+	    && aki->cert_issuer.names[seq].type == GNUTLS_SAN_OTHERNAME) {
+		othername_oid->data = aki->cert_issuer.names[seq].othername_oid.data;
+		othername_oid->size = aki->cert_issuer.names[seq].othername_oid.size;
 	}
 
 	if (san_type)
-		*san_type = aki->cert_issuer.type[seq];
+		*san_type = aki->cert_issuer.names[seq].type;
 
 	return 0;
 
@@ -801,6 +851,8 @@ int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
 	int ret;
 	unsigned i;
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	gnutls_datum_t san, othername_oid;
+	unsigned type;
 
 	ret = asn1_create_element
 	    (_gnutls_get_pkix(), "PKIX1.AuthorityKeyIdentifier", &c2);
@@ -819,31 +871,41 @@ int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
 	/* Read authorityCertIssuer */
 	i = 0;
 	do {
+		san.data = NULL;
+		othername_oid.data = NULL;
+
 		ret = _gnutls_parse_general_name2(c2, "authorityCertIssuer", i,
-						  &aki->cert_issuer.san[i],
-						  &aki->cert_issuer.type[i], 0);
+						  &san,
+						  &type, 0);
 		if (ret < 0)
 			break;
 
-		if (aki->cert_issuer.type[i] == GNUTLS_SAN_OTHERNAME) {
+		if (type == GNUTLS_SAN_OTHERNAME) {
 			ret =
 			    _gnutls_parse_general_name2(c2,
 							"authorityCertIssuer",
 							i,
-							&aki->cert_issuer.
-							othername_oid[i], NULL,
-							1);
+							&othername_oid, 
+							NULL, 1);
 			if (ret < 0)
 				break;
 		}
 
+		ret = subject_alt_names_set(&aki->cert_issuer.names,
+			&aki->cert_issuer.size,
+			type, &san, (char*)othername_oid.data);
+		if (ret < 0)
+			break;
+
 		i++;
-	} while (ret >= 0 && i < MAX_ENTRIES);
+	} while (ret >= 0);
 
 	aki->cert_issuer.size = i;
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
 	    && ret != GNUTLS_E_ASN1_ELEMENT_NOT_FOUND) {
 		gnutls_assert();
+		gnutls_free(san.data);
+		gnutls_free(othername_oid.data);
 		goto cleanup;
 	}
 
@@ -934,12 +996,12 @@ int gnutls_x509_ext_set_authority_key_id(gnutls_aki_t aki, gnutls_datum_t * ext)
 			ret =
 			    _gnutls_write_new_general_name(c2,
 							   "authorityCertIssuer",
+							   aki->cert_issuer.names[i].
+							   type,
 							   aki->cert_issuer.
-							   type[i],
-							   aki->cert_issuer.
-							   san[i].data,
-							   aki->cert_issuer.
-							   san[i].size);
+							   names[i].san.data,
+							   aki->cert_issuer.names[i].
+							   san.size);
 			if (result < 0) {
 				gnutls_assert();
 				goto cleanup;
@@ -2025,6 +2087,16 @@ int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 #if 0
 
 typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
+struct crl_dist_point_st {
+	unsigned int type;
+	gnutls_datum_t point;
+	unsigned int reasons;
+};
+
+struct gnutls_crl_dist_points_st {
+	struct crl_dist_point_st * points;
+	unsigned int size;
+};
 
 int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t *);
 void gnutls_crl_dist_points_deinit(gnutls_crl_dist_points_t);
