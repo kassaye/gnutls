@@ -787,6 +787,43 @@ gnutls_x509_crt_get_serial(gnutls_x509_crt_t cert, void *result,
 	return 0;
 }
 
+static int copy_string(gnutls_datum_t* str, uint8_t *out, size_t *out_size)
+{
+unsigned size_to_check;
+
+	size_to_check = str->size + 1;
+
+	if ((unsigned) size_to_check > *out_size) {
+		gnutls_assert();
+		(*out_size) = size_to_check;
+		return GNUTLS_E_SHORT_MEMORY_BUFFER;
+	}
+
+	if (out != NULL) {
+		memcpy(out, str->data, str->size);
+		out[str->size] = 0;
+	}
+	*out_size = str->size;
+
+	return 0;
+}
+
+static int copy_data(gnutls_datum_t* str, uint8_t *out, size_t *out_size)
+{
+	if ((unsigned) str->size > *out_size) {
+		gnutls_assert();
+		(*out_size) = str->size;
+		return GNUTLS_E_SHORT_MEMORY_BUFFER;
+	}
+
+	if (out != NULL) {
+		memcpy(out, str->data, str->size);
+	}
+	*out_size = str->size;
+
+	return 0;
+}
+
 /**
  * gnutls_x509_crt_get_subject_key_id:
  * @cert: should contain a #gnutls_x509_crt_t structure
@@ -830,60 +867,18 @@ gnutls_x509_crt_get_subject_key_id(gnutls_x509_crt_t cert, void *ret,
 		goto cleanup;
 	}
 
-	if ((unsigned) id.size > *ret_size) {
+	result = copy_data(&id, ret, ret_size);
+	if (result < 0) {
 		gnutls_assert();
-		*ret_size = id.size;
-		result = GNUTLS_E_SHORT_MEMORY_BUFFER;
 		goto cleanup;
 	}
 
-	if (ret != NULL) {
-		memcpy(ret, id.data, id.size);
-	}
-	*ret_size = id.size;
 	result = 0;
 
  cleanup:
 	gnutls_free(der.data);
 	gnutls_free(id.data);
 	return result;
-}
-
-static int copy_string(gnutls_datum_t* str, uint8_t *out, size_t *out_size)
-{
-unsigned size_to_check;
-
-	size_to_check = str->size + 1;
-
-	if ((unsigned) size_to_check > *out_size) {
-		gnutls_assert();
-		(*out_size) = size_to_check;
-		return GNUTLS_E_SHORT_MEMORY_BUFFER;
-	}
-
-	if (out != NULL) {
-		memcpy(out, str->data, str->size);
-		out[str->size] = 0;
-	}
-	*out_size = str->size;
-
-	return 0;
-}
-
-static int copy_data(gnutls_datum_t* str, uint8_t *out, size_t *out_size)
-{
-	if ((unsigned) str->size > *out_size) {
-		gnutls_assert();
-		(*out_size) = str->size;
-		return GNUTLS_E_SHORT_MEMORY_BUFFER;
-	}
-
-	if (out != NULL) {
-		memcpy(out, str->data, str->size);
-	}
-	*out_size = str->size;
-
-	return 0;
 }
 
 inline static int is_type_printable(int type)
