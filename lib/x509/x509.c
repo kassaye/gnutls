@@ -2856,8 +2856,8 @@ gnutls_x509_crt_verify_hash(gnutls_x509_crt_t crt, unsigned int flags,
  * gnutls_x509_crt_get_crl_dist_points:
  * @cert: should contain a #gnutls_x509_crt_t structure
  * @seq: specifies the sequence number of the distribution point (0 for the first one, 1 for the second etc.)
- * @ret: is the place where the distribution point will be copied to
- * @ret_size: holds the size of ret.
+ * @san: is the place where the distribution point will be copied to
+ * @san_size: holds the size of ret.
  * @reason_flags: Revocation reasons. An ORed sequence of flags from %gnutls_x509_crl_reason_flags_t.
  * @critical: will be non-zero if the extension is marked as critical (may be null)
  *
@@ -2875,103 +2875,69 @@ gnutls_x509_crt_verify_hash(gnutls_x509_crt_t crt, unsigned int flags,
  **/
 int
 gnutls_x509_crt_get_crl_dist_points(gnutls_x509_crt_t cert,
-				    unsigned int seq, void *ret,
-				    size_t * ret_size,
+				    unsigned int seq, void *san,
+				    size_t * san_size,
 				    unsigned int *reason_flags,
 				    unsigned int *critical)
 {
-	int result;
+	int ret;
 	gnutls_datum_t dist_points = { NULL, 0 };
-	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
-	char name[ASN1_MAX_NAME_SIZE];
-	int len;
 	gnutls_x509_subject_alt_name_t type;
-	uint8_t reasons[2];
+	gnutls_crl_dist_points_t cdp = NULL;
+	gnutls_datum_t t_san;
 
 	if (cert == NULL) {
 		gnutls_assert();
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
-	if (*ret_size > 0 && ret)
-		memset(ret, 0, *ret_size);
-	else
-		*ret_size = 0;
+	ret = gnutls_crl_dist_points_init(&cdp);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
 
 	if (reason_flags)
 		*reason_flags = 0;
 
-	result =
+	ret =
 	    _gnutls_x509_crt_get_extension(cert, "2.5.29.31", 0,
 					   &dist_points, critical);
-	if (result < 0) {
-		return result;
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
 	}
 
 	if (dist_points.size == 0 || dist_points.data == NULL) {
 		gnutls_assert();
-		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
+		ret = GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
+		goto cleanup;
 	}
 
-	result = asn1_create_element
-	    (_gnutls_get_pkix(), "PKIX1.CRLDistributionPoints", &c2);
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_x509_ext_get_crl_dist_points(&dist_points, cdp);
+	if (ret < 0) {
 		gnutls_assert();
-		_gnutls_free_datum(&dist_points);
-		return _gnutls_asn2err(result);
+		goto cleanup;
 	}
 
-	result =
-	    asn1_der_decoding(&c2, dist_points.data, dist_points.size,
-			      NULL);
+	ret = gnutls_crl_dist_points_get(cdp, seq, &type, &t_san, reason_flags);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = copy_string(&t_san, san, san_size);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = type;
+
+ cleanup:
 	_gnutls_free_datum(&dist_points);
+	if (cdp != NULL)
+		gnutls_crl_dist_points_deinit(cdp);
 
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		asn1_delete_structure(&c2);
-		return _gnutls_asn2err(result);
-	}
-
-	/* Return the different names from the first CRLDistr. point.
-	 * The whole thing is a mess.
-	 */
-	_gnutls_str_cpy(name, sizeof(name),
-			"?1.distributionPoint.fullName");
-
-	result =
-	    _gnutls_parse_general_name(c2, name, seq, ret, ret_size, NULL,
-				       0);
-	if (result < 0) {
-		asn1_delete_structure(&c2);
-		return result;
-	}
-
-	type = result;
-
-
-	/* Read the CRL reasons.
-	 */
-	if (reason_flags) {
-		_gnutls_str_cpy(name, sizeof(name), "?1.reasons");
-
-		reasons[0] = reasons[1] = 0;
-
-		len = sizeof(reasons);
-		result = asn1_read_value(c2, name, reasons, &len);
-
-		if (result != ASN1_VALUE_NOT_FOUND
-		    && result != ASN1_SUCCESS) {
-			gnutls_assert();
-			asn1_delete_structure(&c2);
-			return _gnutls_asn2err(result);
-		}
-
-		*reason_flags = reasons[0] | (reasons[1] << 8);
-	}
-
-	asn1_delete_structure(&c2);
-
-	return type;
+	return ret;
 }
 
 /**

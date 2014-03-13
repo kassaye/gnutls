@@ -675,6 +675,22 @@ int gnutls_aki_init(gnutls_aki_t * aki)
 }
 
 /**
+ * gnutls_aki_deinit:
+ * @aki: The authority key identifier structure
+ *
+ * This function will deinitialize an authority key identifier structure.
+ *
+ * Since: 3.3.0
+ **/
+void gnutls_aki_deinit(gnutls_aki_t aki)
+{
+	gnutls_free(aki->serial.data);
+	gnutls_free(aki->id.data);
+	subject_alt_names_deinit(&aki->cert_issuer);
+	gnutls_free(aki);
+}
+
+/**
  * gnutls_aki_get_id:
  * @aki: The authority key ID structure
  * @id: Will hold the identifier
@@ -814,22 +830,6 @@ int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
 
 	return 0;
 
-}
-
-/**
- * gnutls_aki_deinit:
- * @aki: The authority key identifier structure
- *
- * This function will deinitialize an authority key identifier structure.
- *
- * Since: 3.3.0
- **/
-void gnutls_aki_deinit(gnutls_aki_t aki)
-{
-	gnutls_free(aki->serial.data);
-	gnutls_free(aki->id.data);
-	subject_alt_names_deinit(&aki->cert_issuer);
-	gnutls_free(aki);
 }
 
 /**
@@ -1749,11 +1749,7 @@ int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
  * @policies: A pointer to an initialized policies structures.
  *
  * This function will extract the certificate policy extension (2.5.29.32) 
- * and store it into a number of structures.
- *
- * The individual policies returned by this function must be deinitialized by using
- * gnutls_x509_policy_release(). The @policies pointer must be free'd using
- * gnutls_free().
+ * and store it the provided structure.
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
  *
@@ -2084,12 +2080,10 @@ int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 	return result;
 }
 
-#if 0
 
-typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
 struct crl_dist_point_st {
 	unsigned int type;
-	gnutls_datum_t point;
+	gnutls_datum_t san;
 	unsigned int reasons;
 };
 
@@ -2098,21 +2092,334 @@ struct gnutls_crl_dist_points_st {
 	unsigned int size;
 };
 
-int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t *);
-void gnutls_crl_dist_points_deinit(gnutls_crl_dist_points_t);
-int gnutls_crl_dist_points_get(gnutls_crl_dist_points_t, unsigned int seq,
+/**
+ * gnutls_crl_dist_points_init:
+ * @cdp: The CRL distribution points structure
+ *
+ * This function will initialize a CRL distribution points structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t * cdp)
+{
+	*cdp = gnutls_calloc(1, sizeof(struct gnutls_crl_dist_points_st));
+	if (*cdp == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+
+	return 0;
+}
+
+/**
+ * gnutls_crl_dist_points_deinit:
+ * @cdp: The CRL distribution points structure
+ *
+ * This function will deinitialize a CRL distribution points structure.
+ *
+ * Since: 3.3.0
+ **/
+void gnutls_crl_dist_points_deinit(gnutls_crl_dist_points_t cdp)
+{
+unsigned i;
+
+	for (i=0;i<cdp->size;i++) {
+		gnutls_free(cdp->points[i].san.data);
+	}
+	gnutls_free(cdp->points);
+	gnutls_free(cdp);
+}
+
+
+/**
+ * gnutls_crl_dist_points_get:
+ * @cdp: The CRL distribution points structure
+ * @seq: specifies the sequence number of the distribution point (0 for the first one, 1 for the second etc.)
+ * @type: The name type of the distribution point (gnutls_x509_subject_alt_name_t)
+ * @point: The distribution point value (treated as constant)
+ * @reasons: Revocation reasons. An ORed sequence of flags from %gnutls_x509_crl_reason_flags_t.
+ *
+ * This function retrieves the individual CRL distribution points (2.5.29.31),
+ * contained in provided structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the index is out of bounds, otherwise a negative error value.
+ **/
+
+int gnutls_crl_dist_points_get(gnutls_crl_dist_points_t cdp, unsigned int seq,
 			       unsigned int *type,
 			       gnutls_datum_t * dist,
-			       unsigned int *reason_flags);
-int gnutls_crl_dist_points_set(gnutls_crl_dist_points_t,
-			       gnutls_x509_subject_alt_name_t type,
-			       const gnutls_datum_t * dist,
-			       unsigned int reason_flags);
+			       unsigned int *reasons)
+{
+	if (seq >= cdp->size)
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 
+	if (type)
+		*type = cdp->points[seq].type;
+
+	if (reasons)
+		*reasons = cdp->points[seq].reasons;
+
+	if (dist) {
+		dist->data = cdp->points[seq].san.data;
+		dist->size = cdp->points[seq].san.size;
+	}
+
+	return 0;
+}
+
+static
+int crl_dist_points_set(gnutls_crl_dist_points_t cdp,
+			       gnutls_x509_subject_alt_name_t type,
+			       const gnutls_datum_t * san,
+			       unsigned int reasons)
+{
+	void *tmp;
+
+	tmp = gnutls_realloc(cdp->points, (cdp->size + 1)*sizeof(cdp->points[0]));
+	if (tmp == NULL) {
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+	}
+	cdp->points = tmp;
+
+	cdp->points[cdp->size].type = type;
+	cdp->points[cdp->size].san.data = san->data;
+	cdp->points[cdp->size].san.size = san->size;
+	cdp->points[cdp->size].reasons = reasons;
+
+	cdp->size++;
+	return 0;
+
+}
+
+/**
+ * gnutls_crl_dist_points_set:
+ * @cdp: The CRL distribution points structure
+ * @type: The type of the name (of %gnutls_subject_alt_names_t)
+ * @san: The point name data
+ * @reasons: Revocation reasons. An ORed sequence of flags from %gnutls_x509_crl_reason_flags_t.
+ *
+ * This function will store the specified CRL distibution point value
+ * the @cdp structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0), otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_crl_dist_points_set(gnutls_crl_dist_points_t cdp,
+			       gnutls_x509_subject_alt_name_t type,
+			       const gnutls_datum_t * san,
+			       unsigned int reasons)
+{
+int ret;
+gnutls_datum_t t_san;
+
+	ret = _gnutls_set_datum(&t_san, san->data, san->size);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	ret = crl_dist_points_set(cdp, type, &t_san, reasons);
+	if (ret < 0) {
+		gnutls_free(t_san.data);
+		return gnutls_assert_val(ret);
+	}
+
+	return 0;
+}
+
+
+/**
+ * gnutls_x509_ext_get_crl_dist_points:
+ * @ext: the DER encoded extension data
+ * @cdp: A pointer to an initialized CRL distribution points structure.
+ *
+ * This function will extract the CRL distribution points extension (2.5.29.31) 
+ * and store it into the provided structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
 int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
-					gnutls_crl_dist_points_t dp);
-int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t dp,
-					gnutls_datum_t * ext);
+					gnutls_crl_dist_points_t cdp)
+{
+	int result;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	char name[ASN1_MAX_NAME_SIZE];
+	int len, ret;
+	uint8_t reasons[2];
+	unsigned i, type, rflags;
+	gnutls_datum_t san;
+
+	result = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.CRLDistributionPoints", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result =
+	    asn1_der_decoding(&c2, ext->data, ext->size,
+			      NULL);
+
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	/* Return the different names from the first CRLDistr. point.
+	 * The whole thing is a mess.
+	 */
+
+	i = 0;
+	do {
+		san.data = NULL;
+		snprintf(name, sizeof(name),
+			"?%u.distributionPoint.fullName", (unsigned)i+1);
+
+		ret =
+		    _gnutls_parse_general_name2(c2, name, i, &san, &type, 0);
+		if (ret < 0)
+			break;
+
+		snprintf(name, sizeof(name),
+			"?%u.reasons", (unsigned)i+1);
+
+		len = sizeof(reasons);
+		result = asn1_read_value(c2, name, reasons, &len);
+
+		if (result != ASN1_VALUE_NOT_FOUND &&
+		    result != ASN1_ELEMENT_NOT_FOUND &&
+		    result != ASN1_SUCCESS) {
+			gnutls_assert();
+			ret = _gnutls_asn2err(result);
+			break;
+		}
+
+		if (result == ASN1_VALUE_NOT_FOUND)
+			rflags = 0;
+		else
+			rflags = reasons[0] | (reasons[1] << 8);
+
+		ret = crl_dist_points_set(cdp, type, &san, rflags);
+		if (ret < 0)
+			break;
+		
+		i++;
+	} while (ret >= 0);
+	
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		gnutls_assert();
+		gnutls_free(san.data);
+		goto cleanup;
+	}
+
+	ret = 0;
+ cleanup:
+	asn1_delete_structure(&c2);
+	return ret;
+}
+
+/**
+ * gnutls_x509_ext_set_crl_dist_points:
+ * @cdp: A pointer to an initialized CRL distribution points structure.
+ * @ext: will hold the DER encoded extension data
+ *
+ * This function will convert the provided policies, to a certificate policy
+ * DER encoded extension (2.5.29.31).
+ *
+ * The @ext data will be allocated using gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
+					gnutls_datum_t * ext)
+{
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int result;
+	uint8_t reasons[2];
+	unsigned i;
+
+	result =
+	    asn1_create_element(_gnutls_get_pkix(),
+				"PKIX1.CRLDistributionPoints", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		result = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	for (i=0;i<cdp->size;i++) {
+		result = asn1_write_value(c2, "", "NEW", 1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		if (cdp->points[i].reasons) {
+			reasons[0] = cdp->points[i].reasons & 0xff;
+			reasons[1] = cdp->points[i].reasons >> 8;
+
+			result =
+				asn1_write_value(c2, "?LAST.reasons", reasons, 9);
+		} else {
+			result = asn1_write_value(c2, "?LAST.reasons", NULL, 0);
+		}
+
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		result = asn1_write_value(c2, "?LAST.cRLIssuer", NULL, 0);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+		/* When used as type CHOICE.
+		 */
+		result =
+		    asn1_write_value(c2, "?LAST.distributionPoint", "fullName",
+				     1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			result = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		result =
+		    _gnutls_write_new_general_name(c2, "?LAST.distributionPoint.fullName",
+					   cdp->points[i].type,
+					   cdp->points[i].san.data,
+					   cdp->points[i].san.size);
+		if (result < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+	}
+
+	result = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (result < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	result = 0;
+
+ cleanup:
+	asn1_delete_structure(&c2);
+
+	return result;
+
+}
+
+#if 0
 
 typedef struct gnutls_aia_st *gnutls_aia_t;
 

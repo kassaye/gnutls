@@ -1068,52 +1068,70 @@ gnutls_x509_crt_set_crl_dist_points2(gnutls_x509_crt_t crt,
 				     unsigned int data_size,
 				     unsigned int reason_flags)
 {
-	int result;
+	int ret;
 	gnutls_datum_t der_data = { NULL, 0 };
 	gnutls_datum_t oldname = { NULL, 0 };
 	unsigned int critical;
+	gnutls_crl_dist_points_t cdp = NULL;
+	gnutls_datum_t san;
 
 	if (crt == NULL) {
 		gnutls_assert();
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
+	ret = gnutls_crl_dist_points_init(&cdp);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
 	/* Check if the extension already exists.
 	 */
-	result =
+	ret =
 	    _gnutls_x509_crt_get_extension(crt, "2.5.29.31", 0, &oldname,
 					   &critical);
 
-	_gnutls_free_datum(&oldname);
+	if (ret >= 0) {
+		ret = gnutls_x509_ext_get_crl_dist_points(&oldname, cdp);
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+	}
 
-	if (result != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+	san.data = (void*)data;
+	san.size = data_size;
+	ret = gnutls_crl_dist_points_set(cdp, type, &san, reason_flags);
+	if (ret < 0) {
 		gnutls_assert();
-		return GNUTLS_E_INVALID_REQUEST;
+		goto cleanup;
 	}
 
 	/* generate the extension.
 	 */
-	result =
-	    _gnutls_x509_ext_gen_crl_dist_points(type, data, data_size,
-						 reason_flags, &der_data);
-	if (result < 0) {
+	ret =
+	    gnutls_x509_ext_set_crl_dist_points(cdp, &der_data);
+	if (ret < 0) {
 		gnutls_assert();
-		return result;
+		goto cleanup;
 	}
 
-	result =
+	ret =
 	    _gnutls_x509_crt_set_extension(crt, "2.5.29.31", &der_data, 0);
 
-	_gnutls_free_datum(&der_data);
-
-	if (result < 0) {
+	if (ret < 0) {
 		gnutls_assert();
-		return result;
+		goto cleanup;
 	}
 
 	crt->use_extensions = 1;
+	ret = 0;
+ cleanup:
+	_gnutls_free_datum(&der_data);
+	_gnutls_free_datum(&oldname);
+	if (cdp != NULL)
+		gnutls_crl_dist_points_deinit(cdp);
 
-	return 0;
+	return ret;
 
 }
 
