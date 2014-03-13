@@ -1070,7 +1070,7 @@ gnutls_x509_crt_set_crl_dist_points2(gnutls_x509_crt_t crt,
 {
 	int ret;
 	gnutls_datum_t der_data = { NULL, 0 };
-	gnutls_datum_t oldname = { NULL, 0 };
+	gnutls_datum_t old_der = { NULL, 0 };
 	unsigned int critical;
 	gnutls_crl_dist_points_t cdp = NULL;
 	gnutls_datum_t san;
@@ -1087,11 +1087,11 @@ gnutls_x509_crt_set_crl_dist_points2(gnutls_x509_crt_t crt,
 	/* Check if the extension already exists.
 	 */
 	ret =
-	    _gnutls_x509_crt_get_extension(crt, "2.5.29.31", 0, &oldname,
+	    _gnutls_x509_crt_get_extension(crt, "2.5.29.31", 0, &old_der,
 					   &critical);
 
-	if (ret >= 0) {
-		ret = gnutls_x509_ext_get_crl_dist_points(&oldname, cdp);
+	if (ret >= 0 && old_der.data != NULL) {
+		ret = gnutls_x509_ext_get_crl_dist_points(&old_der, cdp);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
@@ -1127,7 +1127,7 @@ gnutls_x509_crt_set_crl_dist_points2(gnutls_x509_crt_t crt,
 	ret = 0;
  cleanup:
 	_gnutls_free_datum(&der_data);
-	_gnutls_free_datum(&oldname);
+	_gnutls_free_datum(&old_der);
 	if (cdp != NULL)
 		gnutls_crl_dist_points_deinit(cdp);
 

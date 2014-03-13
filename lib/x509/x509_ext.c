@@ -2277,7 +2277,6 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 		san.data = NULL;
 		snprintf(name, sizeof(name),
 			"?%u.distributionPoint.fullName", (unsigned)i+1);
-
 		ret =
 		    _gnutls_parse_general_name2(c2, name, i, &san, &type, 0);
 		if (ret < 0)
@@ -2297,7 +2296,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 			break;
 		}
 
-		if (result == ASN1_VALUE_NOT_FOUND)
+		if (result == ASN1_VALUE_NOT_FOUND || result == ASN1_ELEMENT_NOT_FOUND)
 			rflags = 0;
 		else
 			rflags = reasons[0] | (reasons[1] << 8);
@@ -2308,7 +2307,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 		
 		i++;
 	} while (ret >= 0);
-	
+
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		gnutls_assert();
 		gnutls_free(san.data);
@@ -2365,7 +2364,7 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 			reasons[1] = cdp->points[i].reasons >> 8;
 
 			result =
-				asn1_write_value(c2, "?LAST.reasons", reasons, 9);
+				asn1_write_value(c2, "?LAST.reasons", reasons, 2);
 		} else {
 			result = asn1_write_value(c2, "?LAST.reasons", NULL, 0);
 		}
