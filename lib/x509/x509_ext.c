@@ -2364,44 +2364,47 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 	}
 
 	for (i=0;i<cdp->size;i++) {
-		result = asn1_write_value(c2, "", "NEW", 1);
-		if (result != ASN1_SUCCESS) {
-			gnutls_assert();
-			result = _gnutls_asn2err(result);
-			goto cleanup;
-		}
 
-		if (cdp->points[i].reasons) {
-			reasons[0] = cdp->points[i].reasons & 0xff;
-			reasons[1] = cdp->points[i].reasons >> 8;
+		if (i == 0 || cdp->points[i].reasons != cdp->points[i-1].reasons) {
+			result = asn1_write_value(c2, "", "NEW", 1);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				result = _gnutls_asn2err(result);
+				goto cleanup;
+			}
 
+			if (cdp->points[i].reasons) {
+				reasons[0] = cdp->points[i].reasons & 0xff;
+				reasons[1] = cdp->points[i].reasons >> 8;
+
+				result =
+					asn1_write_value(c2, "?LAST.reasons", reasons, 2);
+			} else {
+				result = asn1_write_value(c2, "?LAST.reasons", NULL, 0);
+			}
+
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				result = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+
+			result = asn1_write_value(c2, "?LAST.cRLIssuer", NULL, 0);
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				result = _gnutls_asn2err(result);
+				goto cleanup;
+			}
+			/* When used as type CHOICE.
+			 */
 			result =
-				asn1_write_value(c2, "?LAST.reasons", reasons, 2);
-		} else {
-			result = asn1_write_value(c2, "?LAST.reasons", NULL, 0);
-		}
-
-		if (result != ASN1_SUCCESS) {
-			gnutls_assert();
-			result = _gnutls_asn2err(result);
-			goto cleanup;
-		}
-
-		result = asn1_write_value(c2, "?LAST.cRLIssuer", NULL, 0);
-		if (result != ASN1_SUCCESS) {
-			gnutls_assert();
-			result = _gnutls_asn2err(result);
-			goto cleanup;
-		}
-		/* When used as type CHOICE.
-		 */
-		result =
-		    asn1_write_value(c2, "?LAST.distributionPoint", "fullName",
+			    asn1_write_value(c2, "?LAST.distributionPoint", "fullName",
 				     1);
-		if (result != ASN1_SUCCESS) {
-			gnutls_assert();
-			result = _gnutls_asn2err(result);
-			goto cleanup;
+			if (result != ASN1_SUCCESS) {
+				gnutls_assert();
+				result = _gnutls_asn2err(result);
+				goto cleanup;
+			}
 		}
 
 		result =
