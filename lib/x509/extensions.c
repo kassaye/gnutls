@@ -765,17 +765,17 @@ int
 _gnutls_x509_ext_gen_auth_key_id(const void *id, size_t id_size,
 				 gnutls_datum_t * der_ext)
 {
-	gnutls_aki_t aki;
+	gnutls_x509_aki_t aki;
 	int ret;
 	gnutls_datum_t l_id;
 
-	ret = gnutls_aki_init(&aki);
+	ret = gnutls_x509_aki_init(&aki);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
 	l_id.data = (void*)id;
 	l_id.size = id_size;
-	ret = gnutls_aki_set_id(aki, &l_id);
+	ret = gnutls_x509_aki_set_id(aki, &l_id);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -790,6 +790,6 @@ _gnutls_x509_ext_gen_auth_key_id(const void *id, size_t id_size,
 	ret = 0;
 
  cleanup:
- 	gnutls_aki_deinit(aki);
+ 	gnutls_x509_aki_deinit(aki);
  	return ret;
 }

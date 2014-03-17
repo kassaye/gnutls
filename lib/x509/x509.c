@@ -925,7 +925,7 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 {
 	int ret;
 	gnutls_datum_t der, san, iserial;
-	gnutls_aki_t aki = NULL;
+	gnutls_x509_aki_t aki = NULL;
 	unsigned san_type;
 
 	if (cert == NULL) {
@@ -944,7 +944,7 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 	}
 
-	ret = gnutls_aki_init(&aki);
+	ret = gnutls_x509_aki_init(&aki);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -956,7 +956,7 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 		goto cleanup;
 	}
 
-	ret = gnutls_aki_get_cert_issuer(aki, seq, &san_type, &san, NULL, &iserial);
+	ret = gnutls_x509_aki_get_cert_issuer(aki, seq, &san_type, &san, NULL, &iserial);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -983,7 +983,7 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 	ret = 0;
  cleanup:
  	if (aki != NULL)
- 		gnutls_aki_deinit(aki);
+ 		gnutls_x509_aki_deinit(aki);
  	gnutls_free(der.data);
  	return ret;
 }
@@ -1013,7 +1013,7 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 {
 	int ret;
 	gnutls_datum_t der, l_id;
-	gnutls_aki_t aki = NULL;
+	gnutls_x509_aki_t aki = NULL;
 
 	if (cert == NULL) {
 		gnutls_assert();
@@ -1031,7 +1031,7 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 	}
 
-	ret = gnutls_aki_init(&aki);
+	ret = gnutls_x509_aki_init(&aki);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1043,11 +1043,11 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 		goto cleanup;
 	}
 
-	ret = gnutls_aki_get_id(aki, &l_id);
+	ret = gnutls_x509_aki_get_id(aki, &l_id);
 
 	if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		gnutls_datum_t serial;
-		ret = gnutls_aki_get_cert_issuer(aki, 0, NULL, NULL, NULL, &serial);
+		ret = gnutls_x509_aki_get_cert_issuer(aki, 0, NULL, NULL, NULL, &serial);
 		if (ret >= 0) {
 			ret = gnutls_assert_val(GNUTLS_E_X509_UNSUPPORTED_EXTENSION);
 		} else {
@@ -1069,7 +1069,7 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 	ret = 0;
  cleanup:
  	if (aki != NULL)
- 		gnutls_aki_deinit(aki);
+ 		gnutls_x509_aki_deinit(aki);
  	gnutls_free(der.data);
  	return ret;
 }
@@ -2878,7 +2878,7 @@ gnutls_x509_crt_get_crl_dist_points(gnutls_x509_crt_t cert,
 	int ret;
 	gnutls_datum_t dist_points = { NULL, 0 };
 	gnutls_x509_subject_alt_name_t type;
-	gnutls_crl_dist_points_t cdp = NULL;
+	gnutls_x509_crl_dist_points_t cdp = NULL;
 	gnutls_datum_t t_san;
 
 	if (cert == NULL) {
@@ -2886,7 +2886,7 @@ gnutls_x509_crt_get_crl_dist_points(gnutls_x509_crt_t cert,
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
-	ret = gnutls_crl_dist_points_init(&cdp);
+	ret = gnutls_x509_crl_dist_points_init(&cdp);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
@@ -2913,7 +2913,7 @@ gnutls_x509_crt_get_crl_dist_points(gnutls_x509_crt_t cert,
 		goto cleanup;
 	}
 
-	ret = gnutls_crl_dist_points_get(cdp, seq, &type, &t_san, reason_flags);
+	ret = gnutls_x509_crl_dist_points_get(cdp, seq, &type, &t_san, reason_flags);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -2930,7 +2930,7 @@ gnutls_x509_crt_get_crl_dist_points(gnutls_x509_crt_t cert,
  cleanup:
 	_gnutls_free_datum(&dist_points);
 	if (cdp != NULL)
-		gnutls_crl_dist_points_deinit(cdp);
+		gnutls_x509_crl_dist_points_deinit(cdp);
 
 	return ret;
 }

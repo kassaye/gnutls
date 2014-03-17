@@ -135,12 +135,11 @@ static
 int subject_alt_names_set(struct name_st **names,
 			  unsigned int *size,
 			  unsigned int san_type,
-			  const gnutls_datum_t * san,
-			  char *othername_oid)
+			  const gnutls_datum_t * san, char *othername_oid)
 {
 	void *tmp;
 
-	tmp = gnutls_realloc(*names, (*size + 1)*sizeof((*names)[0]));
+	tmp = gnutls_realloc(*names, (*size + 1) * sizeof((*names)[0]));
 	if (tmp == NULL) {
 		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 	}
@@ -151,10 +150,8 @@ int subject_alt_names_set(struct name_st **names,
 	(*names)[*size].san.size = san->size;
 
 	if (othername_oid) {
-		(*names)[*size].othername_oid.data =
-			(uint8_t*)othername_oid;
-		(*names)[*size].othername_oid.size = 
-			strlen(othername_oid);
+		(*names)[*size].othername_oid.data = (uint8_t *) othername_oid;
+		(*names)[*size].othername_oid.size = strlen(othername_oid);
 	} else {
 		(*names)[*size].othername_oid.data = NULL;
 		(*names)[*size].othername_oid.size = 0;
@@ -196,7 +193,7 @@ int gnutls_subject_alt_names_set(gnutls_subject_alt_names_t sans,
 	else
 		ooc = NULL;
 	ret = subject_alt_names_set(&sans->names, &sans->size,
-		san_type, &copy, ooc);
+				    san_type, &copy, ooc);
 	if (ret < 0) {
 		gnutls_free(copy.data);
 		return gnutls_assert_val(ret);
@@ -249,8 +246,7 @@ int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
 		san.data = NULL;
 		othername_oid.data = NULL;
 
-		ret =
-		    _gnutls_parse_general_name2(c2, "", i, &san, &type, 0);
+		ret = _gnutls_parse_general_name2(c2, "", i, &san, &type, 0);
 		if (ret < 0)
 			break;
 
@@ -264,7 +260,8 @@ int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
 		}
 
 		ret = subject_alt_names_set(&sans->names, &sans->size,
-			type, &san, (char*)othername_oid.data);
+					    type, &san,
+					    (char *)othername_oid.data);
 		if (ret < 0)
 			break;
 
@@ -288,7 +285,7 @@ int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
 /**
  * gnutls_x509_ext_set_subject_alt_names:
  * @sans: The alternative names structure
- * @ext: The DER-encoded extension data
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the provided alternative names structure to a
  * DER-encoded SubjectAltName PKIX extension. The output data in @ext will be allocated using
@@ -317,9 +314,10 @@ int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t sans,
 			ret = gnutls_assert_val(GNUTLS_E_UNIMPLEMENTED_FEATURE);
 			goto cleanup;
 		}
-		ret = _gnutls_write_new_general_name(c2, "", sans->names[i].type,
-							sans->names[i].san.data,
-							sans->names[i].san.size);
+		ret =
+		    _gnutls_write_new_general_name(c2, "", sans->names[i].type,
+						   sans->names[i].san.data,
+						   sans->names[i].san.size);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
@@ -414,7 +412,7 @@ int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
 /**
  * gnutls_x509_ext_set_name_constraints:
  * @nc: The nameconstraints structure
- * @ext: Will hold the DER encoded extension
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the provided name constraints structure to a
  * DER-encoded PKIX NameConstraints extension. The output data in @ext will be allocated using
@@ -605,7 +603,7 @@ int gnutls_x509_ext_get_subject_key_id(const gnutls_datum_t * ext,
 /**
  * gnutls_x509_ext_set_subject_key_id:
  * @id: The key identifier
- * @ext: Will hold the DER encoded extension
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the provided key identifier to a
  * DER-encoded PKIX SubjectKeyIdentifier extension. 
@@ -649,14 +647,14 @@ int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
 	return ret;
 }
 
-struct gnutls_aki_st {
+struct gnutls_x509_aki_st {
 	gnutls_datum_t id;
 	struct gnutls_subject_alt_names_st cert_issuer;
 	gnutls_datum_t serial;
 };
 
 /**
- * gnutls_aki_init:
+ * gnutls_x509_aki_init:
  * @aki: The authority key ID structure
  *
  * This function will initialize an authority key ID structure.
@@ -665,9 +663,9 @@ struct gnutls_aki_st {
  *
  * Since: 3.3.0
  **/
-int gnutls_aki_init(gnutls_aki_t * aki)
+int gnutls_x509_aki_init(gnutls_x509_aki_t * aki)
 {
-	*aki = gnutls_calloc(1, sizeof(struct gnutls_aki_st));
+	*aki = gnutls_calloc(1, sizeof(struct gnutls_x509_aki_st));
 	if (*aki == NULL)
 		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
@@ -675,14 +673,14 @@ int gnutls_aki_init(gnutls_aki_t * aki)
 }
 
 /**
- * gnutls_aki_deinit:
+ * gnutls_x509_aki_deinit:
  * @aki: The authority key identifier structure
  *
  * This function will deinitialize an authority key identifier structure.
  *
  * Since: 3.3.0
  **/
-void gnutls_aki_deinit(gnutls_aki_t aki)
+void gnutls_x509_aki_deinit(gnutls_x509_aki_t aki)
 {
 	gnutls_free(aki->serial.data);
 	gnutls_free(aki->id.data);
@@ -691,7 +689,7 @@ void gnutls_aki_deinit(gnutls_aki_t aki)
 }
 
 /**
- * gnutls_aki_get_id:
+ * gnutls_x509_aki_get_id:
  * @aki: The authority key ID structure
  * @id: Will hold the identifier
  *
@@ -703,7 +701,7 @@ void gnutls_aki_deinit(gnutls_aki_t aki)
  *
  * Since: 3.3.0
  **/
-int gnutls_aki_get_id(gnutls_aki_t aki, gnutls_datum_t * id)
+int gnutls_x509_aki_get_id(gnutls_x509_aki_t aki, gnutls_datum_t * id)
 {
 	if (aki->id.size == 0)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
@@ -713,7 +711,7 @@ int gnutls_aki_get_id(gnutls_aki_t aki, gnutls_datum_t * id)
 }
 
 /**
- * gnutls_aki_set_id:
+ * gnutls_x509_aki_set_id:
  * @aki: The authority key ID structure
  * @id: the key identifier
  *
@@ -724,13 +722,13 @@ int gnutls_aki_get_id(gnutls_aki_t aki, gnutls_datum_t * id)
  *
  * Since: 3.3.0
  **/
-int gnutls_aki_set_id(gnutls_aki_t aki, const gnutls_datum_t * id)
+int gnutls_x509_aki_set_id(gnutls_x509_aki_t aki, const gnutls_datum_t * id)
 {
 	return _gnutls_set_datum(&aki->id, id->data, id->size);
 }
 
 /**
- * gnutls_aki_set_cert_issuer:
+ * gnutls_x509_aki_set_cert_issuer:
  * @aki: The authority key ID structure
  * @san_type: the type of the name (of %gnutls_subject_alt_names_t), may be null
  * @san: The alternative name data
@@ -745,14 +743,14 @@ int gnutls_aki_set_id(gnutls_aki_t aki, const gnutls_datum_t * id)
  *
  * Since: 3.3.0
  **/
-int gnutls_aki_set_cert_issuer(gnutls_aki_t aki,
-			       unsigned int san_type,
-			       const gnutls_datum_t * san,
-			       const char *othername_oid,
-			       const gnutls_datum_t * serial)
+int gnutls_x509_aki_set_cert_issuer(gnutls_x509_aki_t aki,
+				    unsigned int san_type,
+				    const gnutls_datum_t * san,
+				    const char *othername_oid,
+				    const gnutls_datum_t * serial)
 {
 	int ret;
-	gnutls_datum_t t_san, t_othername_oid = {NULL, 0};
+	gnutls_datum_t t_san, t_othername_oid = { NULL, 0 };
 
 	ret = _gnutls_set_datum(&aki->serial, serial->data, serial->size);
 	if (ret < 0)
@@ -760,8 +758,7 @@ int gnutls_aki_set_cert_issuer(gnutls_aki_t aki,
 
 	aki->cert_issuer.names[aki->cert_issuer.size].type = san_type;
 
-	ret =
-	    _gnutls_set_datum(&t_san, san->data, san->size);
+	ret = _gnutls_set_datum(&t_san, san->data, san->size);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
@@ -774,8 +771,10 @@ int gnutls_aki_set_cert_issuer(gnutls_aki_t aki,
 		t_othername_oid.size = strlen(othername_oid);
 	}
 
-	ret = subject_alt_names_set(&aki->cert_issuer.names, &aki->cert_issuer.size,
-		san_type, &t_san, (char*)t_othername_oid.data);
+	ret =
+	    subject_alt_names_set(&aki->cert_issuer.names,
+				  &aki->cert_issuer.size, san_type, &t_san,
+				  (char *)t_othername_oid.data);
 	if (ret < 0) {
 		gnutls_assert();
 		return ret;
@@ -785,7 +784,7 @@ int gnutls_aki_set_cert_issuer(gnutls_aki_t aki,
 }
 
 /**
- * gnutls_aki_get_cert_issuer:
+ * gnutls_x509_aki_get_cert_issuer:
  * @aki: The authority key ID structure
  * @seq: The index of the name to get
  * @san_type: Will hold the type of the name (of %gnutls_subject_alt_names_t), may be null
@@ -801,10 +800,11 @@ int gnutls_aki_set_cert_issuer(gnutls_aki_t aki,
  *
  * Since: 3.3.0
  **/
-int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
-			       unsigned int *san_type, gnutls_datum_t * san,
-			       gnutls_datum_t * othername_oid,
-			       gnutls_datum_t * serial)
+int gnutls_x509_aki_get_cert_issuer(gnutls_x509_aki_t aki, unsigned int seq,
+				    unsigned int *san_type,
+				    gnutls_datum_t * san,
+				    gnutls_datum_t * othername_oid,
+				    gnutls_datum_t * serial)
 {
 	if (seq >= aki->cert_issuer.size)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
@@ -816,13 +816,16 @@ int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
 		memcpy(serial, &aki->serial, sizeof(gnutls_datum_t));
 
 	if (san) {
-		memcpy(san, &aki->cert_issuer.names[seq].san, sizeof(gnutls_datum_t));
+		memcpy(san, &aki->cert_issuer.names[seq].san,
+		       sizeof(gnutls_datum_t));
 	}
 
 	if (othername_oid != NULL
 	    && aki->cert_issuer.names[seq].type == GNUTLS_SAN_OTHERNAME) {
-		othername_oid->data = aki->cert_issuer.names[seq].othername_oid.data;
-		othername_oid->size = aki->cert_issuer.names[seq].othername_oid.size;
+		othername_oid->data =
+		    aki->cert_issuer.names[seq].othername_oid.data;
+		othername_oid->size =
+		    aki->cert_issuer.names[seq].othername_oid.size;
 	}
 
 	if (san_type)
@@ -846,7 +849,7 @@ int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
-					 gnutls_aki_t aki)
+					 gnutls_x509_aki_t aki)
 {
 	int ret;
 	unsigned i;
@@ -875,8 +878,7 @@ int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
 		othername_oid.data = NULL;
 
 		ret = _gnutls_parse_general_name2(c2, "authorityCertIssuer", i,
-						  &san,
-						  &type, 0);
+						  &san, &type, 0);
 		if (ret < 0)
 			break;
 
@@ -885,15 +887,16 @@ int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
 			    _gnutls_parse_general_name2(c2,
 							"authorityCertIssuer",
 							i,
-							&othername_oid, 
+							&othername_oid,
 							NULL, 1);
 			if (ret < 0)
 				break;
 		}
 
 		ret = subject_alt_names_set(&aki->cert_issuer.names,
-			&aki->cert_issuer.size,
-			type, &san, (char*)othername_oid.data);
+					    &aki->cert_issuer.size,
+					    type, &san,
+					    (char *)othername_oid.data);
 		if (ret < 0)
 			break;
 
@@ -938,7 +941,7 @@ int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
 /**
  * gnutls_x509_ext_set_authority_key_id:
  * @aki: An initialized authority key identifier structure
- * @ext: Will hold the DER encoded extension
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the provided key identifier to a
  * DER-encoded PKIX AuthorityKeyIdentifier extension. 
@@ -949,7 +952,8 @@ int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_set_authority_key_id(gnutls_aki_t aki, gnutls_datum_t * ext)
+int gnutls_x509_ext_set_authority_key_id(gnutls_x509_aki_t aki,
+					 gnutls_datum_t * ext)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	unsigned i;
@@ -996,12 +1000,13 @@ int gnutls_x509_ext_set_authority_key_id(gnutls_aki_t aki, gnutls_datum_t * ext)
 			ret =
 			    _gnutls_write_new_general_name(c2,
 							   "authorityCertIssuer",
-							   aki->cert_issuer.names[i].
-							   type,
 							   aki->cert_issuer.
-							   names[i].san.data,
-							   aki->cert_issuer.names[i].
-							   san.size);
+							   names[i].type,
+							   aki->
+							   cert_issuer.names[i].
+							   san.data,
+							   aki->cert_issuer.
+							   names[i].san.size);
 			if (result < 0) {
 				gnutls_assert();
 				goto cleanup;
@@ -1083,7 +1088,7 @@ int gnutls_x509_ext_get_key_usage(const gnutls_datum_t * ext,
 /**
  * gnutls_x509_ext_set_key_usage:
  * @usage: an ORed sequence of the GNUTLS_KEY_* elements.
- * @ext: will hold the DER encoded extension data
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the keyUsage bit string to a DER
  * encoded PKIX extension. The @ext data will be allocated using
@@ -1183,7 +1188,7 @@ int gnutls_x509_ext_get_private_key_usage_period(const gnutls_datum_t * ext,
  * gnutls_x509_ext_set_private_key_usage_period:
  * @activation: The activation time
  * @expiration: The expiration time
- * @ext: will hold the DER encoded extension data
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the periods provided to a private key
  * usage DER encoded extension (2.5.29.16).
@@ -1305,7 +1310,7 @@ int gnutls_x509_ext_get_basic_constraints(const gnutls_datum_t * ext,
  * gnutls_x509_ext_set_basic_constraints:
  * @ca: non-zero for a CA
  * @pathlen: The path length constraint (set to -1 for no constraint)
- * @ext: will hold the DER encoded extension data
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the parameters provided to a basic constraints
  * DER encoded extension (2.5.29.19).
@@ -1396,7 +1401,7 @@ int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	int result;
-	gnutls_datum_t value = {NULL, 0};
+	gnutls_datum_t value = { NULL, 0 };
 
 	if ((result = asn1_create_element
 	     (_gnutls_get_pkix(), "PKIX1.ProxyCertInfo",
@@ -1433,14 +1438,13 @@ int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
 	}
 
 	if (policyLanguage) {
-		*policyLanguage = (char*) value.data;
+		*policyLanguage = (char *)value.data;
 	} else {
 		gnutls_free(value.data);
 		value.data = NULL;
 	}
 
-	result =
-	    _gnutls_x509_read_value(c2, "proxyPolicy.policy", &value);
+	result = _gnutls_x509_read_value(c2, "proxyPolicy.policy", &value);
 	if (result == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND) {
 		if (policy)
 			*policy = NULL;
@@ -1451,7 +1455,7 @@ int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
 		goto cleanup;
 	} else {
 		if (policy) {
-			*policy = (char *) value.data;
+			*policy = (char *)value.data;
 		}
 		if (sizeof_policy)
 			*sizeof_policy = value.size;
@@ -1473,7 +1477,7 @@ int gnutls_x509_ext_get_proxy(const gnutls_datum_t * ext, int *pathlen,
  * @policyLanguage: OID describing the language of @policy.
  * @policy: uint8_t byte array with policy language, can be %NULL
  * @sizeof_policy: size of @policy.
- * @ext: will hold the DER encoded extension data
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the parameters provided to a proxyCertInfo extension.
  *
@@ -1500,8 +1504,7 @@ int gnutls_x509_ext_set_proxy(int pathLenConstraint, const char *policyLanguage,
 	}
 
 	if (pathLenConstraint < 0) {
-		result =
-		    asn1_write_value(c2, "pCPathLenConstraint", NULL, 0);
+		result = asn1_write_value(c2, "pCPathLenConstraint", NULL, 0);
 		if (result != ASN1_SUCCESS) {
 			gnutls_assert();
 			result = _gnutls_asn2err(result);
@@ -1556,8 +1559,7 @@ static int decode_user_notice(const void *data, size_t size,
 	char name[128];
 	gnutls_datum_t td, utd;
 
-	ret = asn1_create_element
-	    (_gnutls_get_pkix(), "PKIX1.UserNotice", &c2);
+	ret = asn1_create_element(_gnutls_get_pkix(), "PKIX1.UserNotice", &c2);
 	if (ret != ASN1_SUCCESS) {
 		gnutls_assert();
 		ret = GNUTLS_E_PARSING_ERROR;
@@ -1611,11 +1613,11 @@ static int decode_user_notice(const void *data, size_t size,
 		td.data[td.size] = 0;
 	}
 
-	txt->data = (void *) td.data;
+	txt->data = (void *)td.data;
 	txt->size = td.size;
 	ret = 0;
 
-      cleanup:
+ cleanup:
 	asn1_delete_structure(&c2);
 	return ret;
 
@@ -1655,9 +1657,9 @@ int gnutls_x509_policies_init(gnutls_x509_policies_t * policies)
  **/
 void gnutls_x509_policies_deinit(gnutls_x509_policies_t policies)
 {
-unsigned i;
+	unsigned i;
 
-	for (i=0;i<policies->size;i++)
+	for (i = 0; i < policies->size; i++)
 		gnutls_x509_policy_release(&policies->policy[i]);
 	gnutls_free(policies);
 }
@@ -1678,28 +1680,28 @@ unsigned i;
  * Since: 3.3.0
  **/
 int gnutls_x509_policies_get(gnutls_x509_policies_t policies,
-				 unsigned int seq, 
-				 struct gnutls_x509_policy_st *policy)
+			     unsigned int seq,
+			     struct gnutls_x509_policy_st *policy)
 {
 	if (seq >= policies->size)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 
 	if (policy) {
-		memcpy(policy, &policies->policy[seq], sizeof(struct gnutls_x509_policy_st));
+		memcpy(policy, &policies->policy[seq],
+		       sizeof(struct gnutls_x509_policy_st));
 	}
 
 	return 0;
 }
 
-void _gnutls_x509_policies_erase(gnutls_x509_policies_t policies, unsigned int seq)
+void _gnutls_x509_policies_erase(gnutls_x509_policies_t policies,
+				 unsigned int seq)
 {
 	if (seq >= policies->size)
 		return;
 
 	memset(&policies->policy[seq], 0, sizeof(struct gnutls_x509_policy_st));
 }
-
-
 
 /**
  * gnutls_x509_policies_set:
@@ -1715,7 +1717,7 @@ void _gnutls_x509_policies_erase(gnutls_x509_policies_t policies, unsigned int s
  * Since: 3.3.0
  **/
 int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
-				 const struct gnutls_x509_policy_st * policy)
+			     const struct gnutls_x509_policy_st *policy)
 {
 	unsigned i;
 
@@ -1726,15 +1728,20 @@ int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
 	if (policies->policy[policies->size].oid == NULL)
 		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
-	for (i=0;i<policy->qualifiers;i++) {
-		policies->policy[policies->size].qualifier[i].type = policy->qualifier[i].type;
-		policies->policy[policies->size].qualifier[i].size = policy->qualifier[i].size;
-		policies->policy[policies->size].qualifier[i].data = gnutls_malloc(policy->qualifier[i].size+1);
+	for (i = 0; i < policy->qualifiers; i++) {
+		policies->policy[policies->size].qualifier[i].type =
+		    policy->qualifier[i].type;
+		policies->policy[policies->size].qualifier[i].size =
+		    policy->qualifier[i].size;
+		policies->policy[policies->size].qualifier[i].data =
+		    gnutls_malloc(policy->qualifier[i].size + 1);
 		if (policies->policy[policies->size].qualifier[i].data == NULL)
 			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-		memcpy(policies->policy[policies->size].qualifier[i].data, policy->qualifier[i].data,
-			policy->qualifier[i].size);
-		policies->policy[policies->size].qualifier[i].data[policy->qualifier[i].size] = 0;
+		memcpy(policies->policy[policies->size].qualifier[i].data,
+		       policy->qualifier[i].data, policy->qualifier[i].size);
+		policies->policy[policies->size].qualifier[i].data[policy->
+								   qualifier[i].
+								   size] = 0;
 	}
 
 	policies->policy[policies->size].qualifiers = policy->qualifiers;
@@ -1755,8 +1762,8 @@ int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policies_t
-				 policies)
+int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext,
+				 gnutls_x509_policies_t policies)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	char tmpstr[128];
@@ -1780,15 +1787,16 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 		goto cleanup;
 	}
 
-	for (j=0;;j++) {
+	for (j = 0;; j++) {
 		if (j >= MAX_ENTRIES)
 			break;
 
-		memset(&policies->policy[j], 0, sizeof(struct gnutls_x509_policy_st));
+		memset(&policies->policy[j], 0,
+		       sizeof(struct gnutls_x509_policy_st));
 
 		/* create a string like "?1"
 		 */
-		snprintf(tmpstr, sizeof(tmpstr), "?%u.policyIdentifier", j+1);
+		snprintf(tmpstr, sizeof(tmpstr), "?%u.policyIdentifier", j + 1);
 		current = j;
 
 		ret = _gnutls_x509_read_value(c2, tmpstr, &tmpd);
@@ -1800,7 +1808,7 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 			goto full_cleanup;
 		}
 
-		policies->policy[j].oid = (void *) tmpd.data;
+		policies->policy[j].oid = (void *)tmpd.data;
 		tmpd.data = NULL;
 
 		for (i = 0; i < GNUTLS_MAX_QUALIFIERS; i++) {
@@ -1825,7 +1833,7 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 			if (strcmp(tmpoid, "1.3.6.1.5.5.7.2.1") == 0) {
 				snprintf(tmpstr, sizeof(tmpstr),
 					 "?%u.policyQualifiers.?%u.qualifier",
-					 j+1, i + 1);
+					 j + 1, i + 1);
 
 				ret =
 				    _gnutls_x509_read_string(c2, tmpstr, &td,
@@ -1835,7 +1843,8 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 					goto full_cleanup;
 				}
 
-				policies->policy[j].qualifier[i].data = (void *) td.data;
+				policies->policy[j].qualifier[i].data =
+				    (void *)td.data;
 				policies->policy[j].qualifier[i].size = td.size;
 				td.data = NULL;
 				policies->policy[j].qualifier[i].type =
@@ -1845,7 +1854,7 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 
 				snprintf(tmpstr, sizeof(tmpstr),
 					 "?%u.policyQualifiers.?%u.qualifier",
-					 j+1, i + 1);
+					 j + 1, i + 1);
 
 				ret = _gnutls_x509_read_value(c2, tmpstr, &td);
 				if (ret < 0) {
@@ -1853,7 +1862,8 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 					goto full_cleanup;
 				}
 
-				ret = decode_user_notice(td.data, td.size, &txt);
+				ret =
+				    decode_user_notice(td.data, td.size, &txt);
 				gnutls_free(td.data);
 				td.data = NULL;
 
@@ -1862,8 +1872,10 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 					goto full_cleanup;
 				}
 
-				policies->policy[j].qualifier[i].data = (void *) txt.data;
-				policies->policy[j].qualifier[i].size = txt.size;
+				policies->policy[j].qualifier[i].data =
+				    (void *)txt.data;
+				policies->policy[j].qualifier[i].size =
+				    txt.size;
 				policies->policy[j].qualifier[i].type =
 				    GNUTLS_X509_QUALIFIER_NOTICE;
 			} else
@@ -1881,7 +1893,7 @@ int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext, gnutls_x509_policie
 	goto cleanup;
 
  full_cleanup:
-	for (j=0;j<current;j++)
+	for (j = 0; j < current; j++)
 		gnutls_x509_policy_release(&policies->policy[j]);
 
  cleanup:
@@ -1899,8 +1911,7 @@ static int encode_user_notice(const gnutls_datum_t * txt,
 
 	if ((result =
 	     asn1_create_element(_gnutls_get_pkix(),
-				 "PKIX1.UserNotice",
-				 &c2)) != ASN1_SUCCESS) {
+				 "PKIX1.UserNotice", &c2)) != ASN1_SUCCESS) {
 		gnutls_assert();
 		result = _gnutls_asn2err(result);
 		goto error;
@@ -1938,7 +1949,7 @@ static int encode_user_notice(const gnutls_datum_t * txt,
 
 	result = 0;
 
-      error:
+ error:
 	asn1_delete_structure(&c2);
 	return result;
 
@@ -1947,7 +1958,7 @@ static int encode_user_notice(const gnutls_datum_t * txt,
 /**
  * gnutls_x509_ext_set_policies:
  * @policies: A pointer to an initialized policies structure.
- * @ext: will hold the DER encoded extension data
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the provided policies, to a certificate policy
  * DER encoded extension (2.5.29.32).
@@ -1976,7 +1987,7 @@ int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 		goto cleanup;
 	}
 
-	for (j=0;j<policies->size;j++) {
+	for (j = 0; j < policies->size; j++) {
 		/* 1. write a new policy */
 		result = asn1_write_value(c2, "", "NEW", 1);
 		if (result != ASN1_SUCCESS) {
@@ -1988,24 +1999,28 @@ int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 		/* 2. Add the OID.
 		 */
 		result =
-		    asn1_write_value(c2, "?LAST.policyIdentifier", policies->policy[j].oid, 1);
+		    asn1_write_value(c2, "?LAST.policyIdentifier",
+				     policies->policy[j].oid, 1);
 		if (result != ASN1_SUCCESS) {
 			gnutls_assert();
 			result = _gnutls_asn2err(result);
 			goto cleanup;
 		}
 
-		for (i = 0; i < MIN(policies->policy[j].qualifiers, GNUTLS_MAX_QUALIFIERS);
-		     i++) {
+		for (i = 0;
+		     i < MIN(policies->policy[j].qualifiers,
+			     GNUTLS_MAX_QUALIFIERS); i++) {
 			result =
-			    asn1_write_value(c2, "?LAST.policyQualifiers", "NEW", 1);
+			    asn1_write_value(c2, "?LAST.policyQualifiers",
+					     "NEW", 1);
 			if (result != ASN1_SUCCESS) {
 				gnutls_assert();
 				result = _gnutls_asn2err(result);
 				goto cleanup;
 			}
 
-			if (policies->policy[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI)
+			if (policies->policy[j].qualifier[i].type ==
+			    GNUTLS_X509_QUALIFIER_URI)
 				oid = "1.3.6.1.5.5.7.2.1";
 			else if (policies->policy[j].qualifier[i].type ==
 				 GNUTLS_X509_QUALIFIER_NOTICE)
@@ -2018,30 +2033,37 @@ int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 
 			result =
 			    asn1_write_value(c2,
-				     "?LAST.policyQualifiers.?LAST.policyQualifierId",
-				     oid, 1);
+					     "?LAST.policyQualifiers.?LAST.policyQualifierId",
+					     oid, 1);
 			if (result != ASN1_SUCCESS) {
 				gnutls_assert();
 				result = _gnutls_asn2err(result);
 				goto cleanup;
 			}
 
-			if (policies->policy[j].qualifier[i].type == GNUTLS_X509_QUALIFIER_URI) {
-				tmpd.data = (void *) policies->policy[j].qualifier[i].data;
-				tmpd.size = policies->policy[j].qualifier[i].size;
+			if (policies->policy[j].qualifier[i].type ==
+			    GNUTLS_X509_QUALIFIER_URI) {
+				tmpd.data =
+				    (void *)policies->policy[j].qualifier[i].
+				    data;
+				tmpd.size =
+				    policies->policy[j].qualifier[i].size;
 				result =
 				    _gnutls_x509_write_string(c2,
-						      "?LAST.policyQualifiers.?LAST.qualifier",
-						      &tmpd,
-						      ASN1_ETYPE_IA5_STRING);
+							      "?LAST.policyQualifiers.?LAST.qualifier",
+							      &tmpd,
+							      ASN1_ETYPE_IA5_STRING);
 				if (result < 0) {
 					gnutls_assert();
 					goto cleanup;
 				}
 			} else if (policies->policy[j].qualifier[i].type ==
 				   GNUTLS_X509_QUALIFIER_NOTICE) {
-				tmpd.data = (void *) policies->policy[j].qualifier[i].data;
-				tmpd.size = policies->policy[j].qualifier[i].size;
+				tmpd.data =
+				    (void *)policies->policy[j].qualifier[i].
+				    data;
+				tmpd.size =
+				    policies->policy[j].qualifier[i].size;
 
 				if (tmpd.size > 200) {
 					gnutls_assert();
@@ -2057,8 +2079,8 @@ int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 
 				result =
 				    _gnutls_x509_write_value(c2,
-						     "?LAST.policyQualifiers.?LAST.qualifier",
-						     &der_data);
+							     "?LAST.policyQualifiers.?LAST.qualifier",
+							     &der_data);
 				_gnutls_free_datum(&der_data);
 				if (result < 0) {
 					gnutls_assert();
@@ -2074,12 +2096,11 @@ int gnutls_x509_ext_set_policies(gnutls_x509_policies_t policies,
 		goto cleanup;
 	}
 
-      cleanup:
+ cleanup:
 	asn1_delete_structure(&c2);
 
 	return result;
 }
-
 
 struct crl_dist_point_st {
 	unsigned int type;
@@ -2087,13 +2108,13 @@ struct crl_dist_point_st {
 	unsigned int reasons;
 };
 
-struct gnutls_crl_dist_points_st {
-	struct crl_dist_point_st * points;
+struct gnutls_x509_crl_dist_points_st {
+	struct crl_dist_point_st *points;
 	unsigned int size;
 };
 
 /**
- * gnutls_crl_dist_points_init:
+ * gnutls_x509_crl_dist_points_init:
  * @cdp: The CRL distribution points structure
  *
  * This function will initialize a CRL distribution points structure.
@@ -2102,9 +2123,9 @@ struct gnutls_crl_dist_points_st {
  *
  * Since: 3.3.0
  **/
-int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t * cdp)
+int gnutls_x509_crl_dist_points_init(gnutls_x509_crl_dist_points_t * cdp)
 {
-	*cdp = gnutls_calloc(1, sizeof(struct gnutls_crl_dist_points_st));
+	*cdp = gnutls_calloc(1, sizeof(struct gnutls_x509_crl_dist_points_st));
 	if (*cdp == NULL)
 		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
@@ -2112,27 +2133,26 @@ int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t * cdp)
 }
 
 /**
- * gnutls_crl_dist_points_deinit:
+ * gnutls_x509_crl_dist_points_deinit:
  * @cdp: The CRL distribution points structure
  *
  * This function will deinitialize a CRL distribution points structure.
  *
  * Since: 3.3.0
  **/
-void gnutls_crl_dist_points_deinit(gnutls_crl_dist_points_t cdp)
+void gnutls_x509_crl_dist_points_deinit(gnutls_x509_crl_dist_points_t cdp)
 {
-unsigned i;
+	unsigned i;
 
-	for (i=0;i<cdp->size;i++) {
+	for (i = 0; i < cdp->size; i++) {
 		gnutls_free(cdp->points[i].san.data);
 	}
 	gnutls_free(cdp->points);
 	gnutls_free(cdp);
 }
 
-
 /**
- * gnutls_crl_dist_points_get:
+ * gnutls_x509_crl_dist_points_get:
  * @cdp: The CRL distribution points structure
  * @seq: specifies the sequence number of the distribution point (0 for the first one, 1 for the second etc.)
  * @type: The name type of the corresponding name (gnutls_x509_subject_alt_name_t)
@@ -2146,10 +2166,9 @@ unsigned i;
  * if the index is out of bounds, otherwise a negative error value.
  **/
 
-int gnutls_crl_dist_points_get(gnutls_crl_dist_points_t cdp, unsigned int seq,
-			       unsigned int *type,
-			       gnutls_datum_t *san,
-			       unsigned int *reasons)
+int gnutls_x509_crl_dist_points_get(gnutls_x509_crl_dist_points_t cdp,
+				    unsigned int seq, unsigned int *type,
+				    gnutls_datum_t * san, unsigned int *reasons)
 {
 	if (seq >= cdp->size)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
@@ -2169,15 +2188,16 @@ int gnutls_crl_dist_points_get(gnutls_crl_dist_points_t cdp, unsigned int seq,
 }
 
 static
-int crl_dist_points_set(gnutls_crl_dist_points_t cdp,
-			       gnutls_x509_subject_alt_name_t type,
-			       const gnutls_datum_t * san,
-			       unsigned int reasons)
+int crl_dist_points_set(gnutls_x509_crl_dist_points_t cdp,
+			gnutls_x509_subject_alt_name_t type,
+			const gnutls_datum_t * san, unsigned int reasons)
 {
 	void *tmp;
 
 	/* new dist point */
-	tmp = gnutls_realloc(cdp->points, (cdp->size + 1)*sizeof(cdp->points[0]));
+	tmp =
+	    gnutls_realloc(cdp->points,
+			   (cdp->size + 1) * sizeof(cdp->points[0]));
 	if (tmp == NULL) {
 		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 	}
@@ -2194,7 +2214,7 @@ int crl_dist_points_set(gnutls_crl_dist_points_t cdp,
 }
 
 /**
- * gnutls_crl_dist_points_set:
+ * gnutls_x509_crl_dist_points_set:
  * @cdp: The CRL distribution points structure
  * @type: The type of the name (of %gnutls_subject_alt_names_t)
  * @san: The point name data
@@ -2207,13 +2227,13 @@ int crl_dist_points_set(gnutls_crl_dist_points_t cdp,
  *
  * Since: 3.3.0
  **/
-int gnutls_crl_dist_points_set(gnutls_crl_dist_points_t cdp,
-			       gnutls_x509_subject_alt_name_t type,
-			       const gnutls_datum_t * san,
-			       unsigned int reasons)
+int gnutls_x509_crl_dist_points_set(gnutls_x509_crl_dist_points_t cdp,
+				    gnutls_x509_subject_alt_name_t type,
+				    const gnutls_datum_t * san,
+				    unsigned int reasons)
 {
-int ret;
-gnutls_datum_t t_san;
+	int ret;
+	gnutls_datum_t t_san;
 
 	ret = _gnutls_set_datum(&t_san, san->data, san->size);
 	if (ret < 0)
@@ -2228,7 +2248,6 @@ gnutls_datum_t t_san;
 	return 0;
 }
 
-
 /**
  * gnutls_x509_ext_get_crl_dist_points:
  * @ext: the DER encoded extension data
@@ -2242,7 +2261,7 @@ gnutls_datum_t t_san;
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
-					gnutls_crl_dist_points_t cdp)
+					gnutls_x509_crl_dist_points_t cdp)
 {
 	int result;
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
@@ -2259,9 +2278,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 		return _gnutls_asn2err(result);
 	}
 
-	result =
-	    asn1_der_decoding(&c2, ext->data, ext->size,
-			      NULL);
+	result = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
 
 	if (result != ASN1_SUCCESS) {
 		gnutls_assert();
@@ -2277,8 +2294,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 	do {
 		san.data = NULL;
 
-		snprintf(name, sizeof(name),
-			"?%u.reasons", (unsigned)i+1);
+		snprintf(name, sizeof(name), "?%u.reasons", (unsigned)i + 1);
 
 		len = sizeof(reasons);
 		result = asn1_read_value(c2, name, reasons, &len);
@@ -2291,19 +2307,22 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 			break;
 		}
 
-		if (result == ASN1_VALUE_NOT_FOUND || result == ASN1_ELEMENT_NOT_FOUND)
+		if (result == ASN1_VALUE_NOT_FOUND
+		    || result == ASN1_ELEMENT_NOT_FOUND)
 			rflags = 0;
 		else
 			rflags = reasons[0] | (reasons[1] << 8);
 
 		snprintf(name, sizeof(name),
-			"?%u.distributionPoint.fullName", (unsigned)i+1);
-		
+			 "?%u.distributionPoint.fullName", (unsigned)i + 1);
+
 		j = 0;
 		do {
 			ret =
-			    _gnutls_parse_general_name2(c2, name, j, &san, &type, 0);
-			if (j > 0 && ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+			    _gnutls_parse_general_name2(c2, name, j, &san,
+							&type, 0);
+			if (j > 0
+			    && ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 				ret = 0;
 				break;
 			}
@@ -2315,7 +2334,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 				break;
 
 			j++;
-		} while(ret >= 0);
+		} while (ret >= 0);
 
 		i++;
 	} while (ret >= 0);
@@ -2335,7 +2354,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 /**
  * gnutls_x509_ext_set_crl_dist_points:
  * @cdp: A pointer to an initialized CRL distribution points structure.
- * @ext: will hold the DER encoded extension data
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the provided policies, to a certificate policy
  * DER encoded extension (2.5.29.31).
@@ -2346,7 +2365,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
  *
  * Since: 3.3.0
  **/
-int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
+int gnutls_x509_ext_set_crl_dist_points(gnutls_x509_crl_dist_points_t cdp,
 					gnutls_datum_t * ext)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
@@ -2363,9 +2382,10 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 		goto cleanup;
 	}
 
-	for (i=0;i<cdp->size;i++) {
+	for (i = 0; i < cdp->size; i++) {
 
-		if (i == 0 || cdp->points[i].reasons != cdp->points[i-1].reasons) {
+		if (i == 0
+		    || cdp->points[i].reasons != cdp->points[i - 1].reasons) {
 			result = asn1_write_value(c2, "", "NEW", 1);
 			if (result != ASN1_SUCCESS) {
 				gnutls_assert();
@@ -2378,9 +2398,12 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 				reasons[1] = cdp->points[i].reasons >> 8;
 
 				result =
-					asn1_write_value(c2, "?LAST.reasons", reasons, 2);
+				    asn1_write_value(c2, "?LAST.reasons",
+						     reasons, 2);
 			} else {
-				result = asn1_write_value(c2, "?LAST.reasons", NULL, 0);
+				result =
+				    asn1_write_value(c2, "?LAST.reasons", NULL,
+						     0);
 			}
 
 			if (result != ASN1_SUCCESS) {
@@ -2389,7 +2412,8 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 				goto cleanup;
 			}
 
-			result = asn1_write_value(c2, "?LAST.cRLIssuer", NULL, 0);
+			result =
+			    asn1_write_value(c2, "?LAST.cRLIssuer", NULL, 0);
 			if (result != ASN1_SUCCESS) {
 				gnutls_assert();
 				result = _gnutls_asn2err(result);
@@ -2398,8 +2422,8 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 			/* When used as type CHOICE.
 			 */
 			result =
-			    asn1_write_value(c2, "?LAST.distributionPoint", "fullName",
-				     1);
+			    asn1_write_value(c2, "?LAST.distributionPoint",
+					     "fullName", 1);
 			if (result != ASN1_SUCCESS) {
 				gnutls_assert();
 				result = _gnutls_asn2err(result);
@@ -2408,10 +2432,11 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 		}
 
 		result =
-		    _gnutls_write_new_general_name(c2, "?LAST.distributionPoint.fullName",
-					   cdp->points[i].type,
-					   cdp->points[i].san.data,
-					   cdp->points[i].san.size);
+		    _gnutls_write_new_general_name(c2,
+						   "?LAST.distributionPoint.fullName",
+						   cdp->points[i].type,
+						   cdp->points[i].san.data,
+						   cdp->points[i].san.size);
 		if (result < 0) {
 			gnutls_assert();
 			goto cleanup;
@@ -2433,21 +2458,337 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t cdp,
 
 }
 
-#if 0
+struct gnutls_x509_aia_st {
+	struct {
+		gnutls_info_access_what_t what;
+		unsigned int san_type;
+		gnutls_datum_t san;
+	} *aia;
+	unsigned int size;
+};
 
-typedef struct gnutls_aia_st *gnutls_aia_t;
+/**
+ * gnutls_x509_aia_init:
+ * @aia: The authority info access structure
+ *
+ * This function will initialize a CRL distribution points structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_aia_init(gnutls_x509_aia_t * aia)
+{
+	*aia = gnutls_calloc(1, sizeof(struct gnutls_x509_aia_st));
+	if (*aia == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
-int gnutls_aia_init(gnutls_aia_t *);
-void gnutls_aia_deinit(gnutls_aia_t);
-int gnutls_aia_get(gnutls_aia_t, unsigned int seq,
-		   gnutls_info_access_what_t what, gnutls_datum_t * data);
-int gnutls_aia_set(gnutls_aia_t,
-		   gnutls_info_access_what_t what, const gnutls_datum_t * data);
+	return 0;
+}
 
-int gnutls_x509_ext_get_authority_info_access(const gnutls_datum_t * ext,
-					      gnutls_aia_t);
-int gnutls_x509_ext_set_authority_info_access(gnutls_aia_t aia,
-					      gnutls_datum_t * ext);
+/**
+ * gnutls_x509_aia_deinit:
+ * @aia: The authority info access structure
+ *
+ * This function will deinitialize a CRL distribution points structure.
+ *
+ * Since: 3.3.0
+ **/
+void gnutls_x509_aia_deinit(gnutls_x509_aia_t aia)
+{
+	unsigned i;
+
+	for (i = 0; i < aia->size; i++) {
+		gnutls_free(aia->aia[i].san.data);
+	}
+	gnutls_free(aia->aia);
+	gnutls_free(aia);
+}
+
+/**
+ * gnutls_x509_aia_get:
+ * @aia: The authority info access structure
+ * @seq: specifies the sequence number of the access descriptor (0 for the first one, 1 for the second etc.)
+ * @what: what data are available, a #gnutls_info_access_what_t type (may be null).
+ * @san_type: Will hold the type of the name of %gnutls_subject_alt_names_t (may be null).
+ * @san: the access location name; to be treated as constant (may be null).
+ *
+ * This function extracts the Authority Information Access (AIA)
+ * extension, see RFC 5280 section 4.2.2.1 for more information.  The
+ * AIA extension holds a sequence of AccessDescription (AD) data:
+ *
+ * The @seq input parameter is used to indicate which member of the
+ * sequence the caller is interested in.  The first member is 0, the
+ * second member 1 and so on.  When the @seq value is out of bounds,
+ * %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE is returned.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_aia_get(gnutls_x509_aia_t aia, unsigned int seq,
+			unsigned *what,
+			unsigned *san_type,
+			gnutls_datum_t *san)
+{
+	if (seq >= aia->size)
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+
+	if (what)
+		*what = aia->aia[seq].what;
+	if (san_type)
+		*san_type = aia->aia[seq].san_type;
+	if (san) {
+		san->data = aia->aia[seq].san.data;
+		san->size = aia->aia[seq].san.size;
+	}
+
+	return 0;
+}
+
+/**
+ * gnutls_x509_aia_set:
+ * @aia: The authority info access structure
+ * @what: what data are available, a #gnutls_info_access_what_t type.
+ * @san_type: The type of the name (of %gnutls_subject_alt_names_t)
+ * @san: The alternative name data
+ * @othername_oid: The object identifier if @san_type is %GNUTLS_SAN_OTHERNAME
+ *
+ * This function will store the specified alternative name in
+ * the @aia structure. The available values for @what are the members
+ * of #gnutls_info_access_what_t with value larger than 10000. That is:
+ * %GNUTLS_IA_OCSP_URI and %GNUTLS_IA_CAISSUERS_URI.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0), otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_aia_set(gnutls_x509_aia_t aia,
+			unsigned what,
+			unsigned san_type,
+			const gnutls_datum_t * san)
+{
+	int ret;
+	void *tmp;
+	unsigned indx;
+
+	tmp = gnutls_realloc(aia->aia, (aia->size + 1) * sizeof(aia->aia[0]));
+	if (tmp == NULL) {
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+	}
+	aia->aia = tmp;
+	indx = aia->size;
+	
+
+	aia->aia[indx].what = what;
+	aia->aia[indx].san_type = san_type;
+
+	ret = _gnutls_set_datum(&aia->aia[indx].san, san->data, san->size);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	aia->size++;
+
+	return 0;	
+}
 
 
-#endif
+static int parse_aia(ASN1_TYPE c2, gnutls_x509_aia_t aia)
+{
+	int len;
+	char nptr[ASN1_MAX_NAME_SIZE];
+	int ret, result;
+	char tmpoid[MAX_OID_SIZE];
+	void * tmp;
+	unsigned i, indx;
+
+	for (i = 1;; i++) {
+		snprintf(nptr, sizeof(nptr), "?%u.accessMethod", i);
+
+		len = sizeof(tmpoid);
+		result = asn1_read_value(c2, nptr, tmpoid, &len);
+		if (result == ASN1_VALUE_NOT_FOUND
+		    || result == ASN1_ELEMENT_NOT_FOUND) {
+		        ret = GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
+			break;
+		}
+
+		indx = aia->size;
+		tmp = gnutls_realloc(aia->aia, (aia->size + 1) * sizeof(aia->aia[0]));
+		if (tmp == NULL) {
+			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+		}
+		aia->aia = tmp;
+
+		if (result != ASN1_MEM_ERROR) {
+			gnutls_assert();
+			return _gnutls_asn2err(result);
+		}
+
+		if (strcmp(tmpoid, GNUTLS_OID_AD_CAISSUERS) == 0) {
+			aia->aia[indx].what = GNUTLS_IA_CAISSUERS_URI;
+		} else if (strcmp(tmpoid, GNUTLS_OID_AD_CAISSUERS) == 0) {
+			aia->aia[indx].what = GNUTLS_IA_OCSP_URI;
+		} else {
+			_gnutls_debug_log("unknown access method OID %s\n", tmpoid);
+			aia->aia[indx].what = GNUTLS_IA_UNKNOWN;
+		}
+
+		snprintf(nptr, sizeof(nptr), "?%u.accessLocation", i);
+
+		ret = _gnutls_parse_general_name2(c2, nptr, -1, &aia->aia[indx].san, 
+			&aia->aia[indx].san_type, 0);
+		if (ret < 0)
+			break;
+
+		aia->size++;
+	}
+	while (ret >= 0);
+	
+	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		return ret;
+	}
+
+	return 0;
+}
+
+/**
+ * gnutls_x509_ext_get_aia:
+ * @ext: The DER-encoded extension data
+ * @aia: The authority info access structure
+ *
+ * This function extracts the Authority Information Access (AIA)
+ * extension from the provided DER-encoded data; see RFC 5280 section 4.2.2.1 
+ * for more information on the extension.  The
+ * AIA extension holds a sequence of AccessDescription (AD) data.
+ * 
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_aia(const gnutls_datum_t * ext,
+					      gnutls_x509_aia_t aia)
+{
+	int ret;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+
+	if (ext->size == 0 || ext->data == NULL) {
+		gnutls_assert();
+		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
+	}
+
+	ret = asn1_create_element(_gnutls_get_pkix(),
+				  "PKIX1.AuthorityInfoAccessSyntax", &c2);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(ret);
+	}
+
+	ret = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(ret);
+		goto cleanup;
+	}
+
+	ret = parse_aia(c2, aia);
+	if (ret < 0) {
+		gnutls_assert();
+	}
+
+ cleanup:
+	asn1_delete_structure(&c2);
+
+	return ret;
+
+}
+
+static const char *what_to_oid(int what)
+{
+	switch (what) {
+	case GNUTLS_IA_OCSP_URI:
+		return GNUTLS_OID_AD_OCSP;
+	case GNUTLS_IA_CAISSUERS_URI:
+		return GNUTLS_OID_AD_CAISSUERS;
+	default:
+		return NULL;
+	}
+}
+
+/**
+ * gnutls_x509_ext_set_aia:
+ * @aia: The authority info access structure
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
+ *
+ * This function will DER encode the Authority Information Access (AIA)
+ * extension; see RFC 5280 section 4.2.2.1 for more information on the
+ * extension.  
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a
+ *   negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_aia(gnutls_x509_aia_t aia,
+					      gnutls_datum_t * ext)
+{
+	int ret, result;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	const char *oid;
+	unsigned int i;
+
+	ret = asn1_create_element(_gnutls_get_pkix(),
+				  "PKIX1.AuthorityInfoAccessSyntax", &c2);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(ret);
+	}
+
+	/* 1. create a new element.
+	 */
+	for (i=0;i<aia->size;i++) {
+		result = asn1_write_value(c2, "", "NEW", 1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			ret = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		oid = what_to_oid(aia->aia[i].what);
+		if (oid == NULL) {
+			ret = gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+			goto cleanup;
+		}
+
+		/* 2. Add the OID.
+		 */
+		result = asn1_write_value(c2, "?LAST.accessMethod", oid, 1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			ret = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		ret =
+		    _gnutls_write_general_name(c2,
+						   "?LAST.accessLocation",
+						   aia->aia[i].san_type,
+						   aia->aia[i].san.data,
+						   aia->aia[i].san.size);
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+	}
+
+	ret = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+ cleanup:
+	asn1_delete_structure(&c2);
+
+	return ret;
+}
