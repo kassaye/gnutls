@@ -2135,12 +2135,12 @@ unsigned i;
  * gnutls_crl_dist_points_get:
  * @cdp: The CRL distribution points structure
  * @seq: specifies the sequence number of the distribution point (0 for the first one, 1 for the second etc.)
- * @type: The name type of the distribution point (gnutls_x509_subject_alt_name_t)
- * @point: The distribution point value (treated as constant)
+ * @type: The name type of the corresponding name (gnutls_x509_subject_alt_name_t)
+ * @san: The distribution point names (to be treated as constant)
  * @reasons: Revocation reasons. An ORed sequence of flags from %gnutls_x509_crl_reason_flags_t.
  *
  * This function retrieves the individual CRL distribution points (2.5.29.31),
- * contained in provided structure.
+ * contained in provided structure. 
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
  * if the index is out of bounds, otherwise a negative error value.
@@ -2148,21 +2148,21 @@ unsigned i;
 
 int gnutls_crl_dist_points_get(gnutls_crl_dist_points_t cdp, unsigned int seq,
 			       unsigned int *type,
-			       gnutls_datum_t * dist,
+			       gnutls_datum_t *san,
 			       unsigned int *reasons)
 {
 	if (seq >= cdp->size)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 
-	if (type)
-		*type = cdp->points[seq].type;
-
 	if (reasons)
 		*reasons = cdp->points[seq].reasons;
 
-	if (dist) {
-		dist->data = cdp->points[seq].san.data;
-		dist->size = cdp->points[seq].san.size;
+	if (type)
+		*type = cdp->points[seq].type;
+
+	if (san) {
+		san->data = cdp->points[seq].san.data;
+		san->size = cdp->points[seq].san.size;
 	}
 
 	return 0;
@@ -2176,6 +2176,7 @@ int crl_dist_points_set(gnutls_crl_dist_points_t cdp,
 {
 	void *tmp;
 
+	/* new dist point */
 	tmp = gnutls_realloc(cdp->points, (cdp->size + 1)*sizeof(cdp->points[0]));
 	if (tmp == NULL) {
 		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
@@ -2248,7 +2249,7 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 	char name[ASN1_MAX_NAME_SIZE];
 	int len, ret;
 	uint8_t reasons[2];
-	unsigned i, type, rflags;
+	unsigned i, type, rflags, j;
 	gnutls_datum_t san;
 
 	result = asn1_create_element
@@ -2275,12 +2276,6 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 	i = 0;
 	do {
 		san.data = NULL;
-		snprintf(name, sizeof(name),
-			"?%u.distributionPoint.fullName", (unsigned)i+1);
-		ret =
-		    _gnutls_parse_general_name2(c2, name, i, &san, &type, 0);
-		if (ret < 0)
-			break;
 
 		snprintf(name, sizeof(name),
 			"?%u.reasons", (unsigned)i+1);
@@ -2301,10 +2296,27 @@ int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
 		else
 			rflags = reasons[0] | (reasons[1] << 8);
 
-		ret = crl_dist_points_set(cdp, type, &san, rflags);
-		if (ret < 0)
-			break;
+		snprintf(name, sizeof(name),
+			"?%u.distributionPoint.fullName", (unsigned)i+1);
 		
+		j = 0;
+		do {
+			ret =
+			    _gnutls_parse_general_name2(c2, name, j, &san, &type, 0);
+			if (j > 0 && ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+				ret = 0;
+				break;
+			}
+			if (ret < 0)
+				break;
+
+			ret = crl_dist_points_set(cdp, type, &san, rflags);
+			if (ret < 0)
+				break;
+
+			j++;
+		} while(ret >= 0);
+
 		i++;
 	} while (ret >= 0);
 
