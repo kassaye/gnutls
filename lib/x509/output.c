@@ -98,7 +98,7 @@ char *p;
 		break;
 
 	case GNUTLS_SAN_RFC822NAME:
-		addf(str,  _("%stRFC822Name: %.*s\n"), prefix, name->size, NON_NULL(name->data));
+		addf(str,  _("%sRFC822Name: %.*s\n"), prefix, name->size, NON_NULL(name->data));
 		break;
 
 	case GNUTLS_SAN_URI:
