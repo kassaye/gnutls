@@ -52,8 +52,8 @@ efficiently.
 That avoids long delays in gnutls initialization due to broken PKCS #11
 modules.
 
-** libgnutls: The PKCS #11 subsystem is reinitialized automatically when 
-a fork is detected.
+** libgnutls: The PKCS #11 subsystem is re-initialized "automatically"
+on the first PKCS #11 API call after a fork. 
 
 ** libgnutls: Added --enable-fips140-mode configuration option. That
 option enables (when running on FIPS140-enabled system):
