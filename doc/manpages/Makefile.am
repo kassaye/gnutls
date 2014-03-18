@@ -704,6 +704,10 @@ APIMANS += gnutls_store_commitment.3
 APIMANS += gnutls_store_pubkey.3
 APIMANS += gnutls_strerror.3
 APIMANS += gnutls_strerror_name.3
+APIMANS += gnutls_subject_alt_names_deinit.3
+APIMANS += gnutls_subject_alt_names_get.3
+APIMANS += gnutls_subject_alt_names_init.3
+APIMANS += gnutls_subject_alt_names_set.3
 APIMANS += gnutls_supplemental_get_name.3
 APIMANS += gnutls_tdb_deinit.3
 APIMANS += gnutls_tdb_init.3
@@ -731,8 +735,22 @@ APIMANS += gnutls_transport_set_push_function.3
 APIMANS += gnutls_transport_set_vec_push_function.3
 APIMANS += gnutls_url_is_supported.3
 APIMANS += gnutls_verify_stored_pubkey.3
+APIMANS += gnutls_x509_aia_deinit.3
+APIMANS += gnutls_x509_aia_get.3
+APIMANS += gnutls_x509_aia_init.3
+APIMANS += gnutls_x509_aia_set.3
+APIMANS += gnutls_x509_aki_deinit.3
+APIMANS += gnutls_x509_aki_get_cert_issuer.3
+APIMANS += gnutls_x509_aki_get_id.3
+APIMANS += gnutls_x509_aki_init.3
+APIMANS += gnutls_x509_aki_set_cert_issuer.3
+APIMANS += gnutls_x509_aki_set_id.3
 APIMANS += gnutls_x509_crl_check_issuer.3
 APIMANS += gnutls_x509_crl_deinit.3
+APIMANS += gnutls_x509_crl_dist_points_deinit.3
+APIMANS += gnutls_x509_crl_dist_points_get.3
+APIMANS += gnutls_x509_crl_dist_points_init.3
+APIMANS += gnutls_x509_crl_dist_points_set.3
 APIMANS += gnutls_x509_crl_export.3
 APIMANS += gnutls_x509_crl_export2.3
 APIMANS += gnutls_x509_crl_get_authority_key_gn_serial.3
@@ -741,6 +759,7 @@ APIMANS += gnutls_x509_crl_get_crt_count.3
 APIMANS += gnutls_x509_crl_get_crt_serial.3
 APIMANS += gnutls_x509_crl_get_dn_oid.3
 APIMANS += gnutls_x509_crl_get_extension_data.3
+APIMANS += gnutls_x509_crl_get_extension_data2.3
 APIMANS += gnutls_x509_crl_get_extension_info.3
 APIMANS += gnutls_x509_crl_get_extension_oid.3
 APIMANS += gnutls_x509_crl_get_issuer_dn.3
@@ -783,6 +802,7 @@ APIMANS += gnutls_x509_crq_get_dn_by_oid.3
 APIMANS += gnutls_x509_crq_get_dn_oid.3
 APIMANS += gnutls_x509_crq_get_extension_by_oid.3
 APIMANS += gnutls_x509_crq_get_extension_data.3
+APIMANS += gnutls_x509_crq_get_extension_data2.3
 APIMANS += gnutls_x509_crq_get_extension_info.3
 APIMANS += gnutls_x509_crq_get_key_id.3
 APIMANS += gnutls_x509_crq_get_key_purpose_oid.3
@@ -834,6 +854,7 @@ APIMANS += gnutls_x509_crt_get_dn_oid.3
 APIMANS += gnutls_x509_crt_get_expiration_time.3
 APIMANS += gnutls_x509_crt_get_extension_by_oid.3
 APIMANS += gnutls_x509_crt_get_extension_data.3
+APIMANS += gnutls_x509_crt_get_extension_data2.3
 APIMANS += gnutls_x509_crt_get_extension_info.3
 APIMANS += gnutls_x509_crt_get_extension_oid.3
 APIMANS += gnutls_x509_crt_get_fingerprint.3
@@ -893,6 +914,7 @@ APIMANS += gnutls_x509_crt_set_dn.3
 APIMANS += gnutls_x509_crt_set_dn_by_oid.3
 APIMANS += gnutls_x509_crt_set_expiration_time.3
 APIMANS += gnutls_x509_crt_set_extension_by_oid.3
+APIMANS += gnutls_x509_crt_set_issuer_alt_name.3
 APIMANS += gnutls_x509_crt_set_issuer_dn.3
 APIMANS += gnutls_x509_crt_set_issuer_dn_by_oid.3
 APIMANS += gnutls_x509_crt_set_key.3
@@ -923,6 +945,28 @@ APIMANS += gnutls_x509_dn_import.3
 APIMANS += gnutls_x509_dn_init.3
 APIMANS += gnutls_x509_dn_oid_known.3
 APIMANS += gnutls_x509_dn_oid_name.3
+APIMANS += gnutls_x509_ext_get_aia.3
+APIMANS += gnutls_x509_ext_get_authority_key_id.3
+APIMANS += gnutls_x509_ext_get_basic_constraints.3
+APIMANS += gnutls_x509_ext_get_crl_dist_points.3
+APIMANS += gnutls_x509_ext_get_key_usage.3
+APIMANS += gnutls_x509_ext_get_name_constraints.3
+APIMANS += gnutls_x509_ext_get_policies.3
+APIMANS += gnutls_x509_ext_get_private_key_usage_period.3
+APIMANS += gnutls_x509_ext_get_proxy.3
+APIMANS += gnutls_x509_ext_get_subject_alt_names.3
+APIMANS += gnutls_x509_ext_get_subject_key_id.3
+APIMANS += gnutls_x509_ext_set_aia.3
+APIMANS += gnutls_x509_ext_set_authority_key_id.3
+APIMANS += gnutls_x509_ext_set_basic_constraints.3
+APIMANS += gnutls_x509_ext_set_crl_dist_points.3
+APIMANS += gnutls_x509_ext_set_key_usage.3
+APIMANS += gnutls_x509_ext_set_name_constraints.3
+APIMANS += gnutls_x509_ext_set_policies.3
+APIMANS += gnutls_x509_ext_set_private_key_usage_period.3
+APIMANS += gnutls_x509_ext_set_proxy.3
+APIMANS += gnutls_x509_ext_set_subject_alt_names.3
+APIMANS += gnutls_x509_ext_set_subject_key_id.3
 APIMANS += gnutls_x509_name_constraints_add_excluded.3
 APIMANS += gnutls_x509_name_constraints_add_permitted.3
 APIMANS += gnutls_x509_name_constraints_check.3
@@ -931,6 +975,10 @@ APIMANS += gnutls_x509_name_constraints_deinit.3
 APIMANS += gnutls_x509_name_constraints_get_excluded.3
 APIMANS += gnutls_x509_name_constraints_get_permitted.3
 APIMANS += gnutls_x509_name_constraints_init.3
+APIMANS += gnutls_x509_policies_deinit.3
+APIMANS += gnutls_x509_policies_get.3
+APIMANS += gnutls_x509_policies_init.3
+APIMANS += gnutls_x509_policies_set.3
 APIMANS += gnutls_x509_policy_release.3
 APIMANS += gnutls_x509_privkey_cpy.3
 APIMANS += gnutls_x509_privkey_deinit.3
@@ -1001,7 +1049,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/gnutls.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1015,7 +1063,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/compat.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1029,7 +1077,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/dane.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1043,7 +1091,21 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/x509.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
+			-function $$i \
+			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
+		echo $(ECHO_N) "."; \
+	done
+	@echo ""
+	@echo $(ECHO_N) "Creating man pages for x509-ext.h..." && \
+	for i in `$(top_srcdir)/doc/scripts/getfuncs.pl <$(top_srcdir)/lib/includes/gnutls/x509-ext.h`; do \
+		$(top_srcdir)/doc/scripts/gdoc -man \
+			-module $(PACKAGE) -sourceversion $(VERSION) \
+			-bugsto $(PACKAGE_BUGREPORT) \
+			-pkg-name "$(PACKAGE_NAME)" \
+			-include "gnutls/x509-ext.h" \
+			-seeinfo $(PACKAGE) -verbatimcopying \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1057,7 +1119,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/ocsp.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1071,7 +1133,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/abstract.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1085,7 +1147,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/pkcs12.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1099,7 +1161,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/pkcs11.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1113,7 +1175,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/dtls.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1127,7 +1189,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/openpgp.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1141,7 +1203,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/crypto.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
@@ -1155,7 +1217,7 @@ stamp_mans: $(HEADER_FILES)
 			-pkg-name "$(PACKAGE_NAME)" \
 			-include "gnutls/tpm.h" \
 			-seeinfo $(PACKAGE) -verbatimcopying \
-			-copyright "2001-2013 Free Software Foundation, Inc." \
+			-copyright "2001-2014 Free Software Foundation, Inc." \
 			-function $$i \
 			$(C_SOURCE_FILES) > $$i.3 2>/dev/null && \
 		echo $(ECHO_N) "."; \
