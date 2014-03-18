@@ -37,7 +37,7 @@ extern "C" {
 typedef struct gnutls_subject_alt_names_st *gnutls_subject_alt_names_t;
 
 int gnutls_subject_alt_names_init(gnutls_subject_alt_names_t *);
-void gnutls_subject_alt_names_deinit(gnutls_subject_alt_names_t);
+void gnutls_subject_alt_names_deinit(gnutls_subject_alt_names_t sans);
 int gnutls_subject_alt_names_get(gnutls_subject_alt_names_t sans, unsigned int seq,
 				 unsigned int *san_type, gnutls_datum_t * san,
 				 gnutls_datum_t * othername_oid);
