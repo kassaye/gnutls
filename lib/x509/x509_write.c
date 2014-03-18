@@ -1487,6 +1487,7 @@ gnutls_x509_crt_set_authority_info_access(gnutls_x509_crt_t crt,
 	gnutls_datum_t der = { NULL, 0 };
 	gnutls_datum_t new_der = { NULL, 0 };
 	gnutls_x509_aia_t aia_ctx = NULL;
+	const char *oid;
 	unsigned int c;
 
 	if (crt == NULL)
@@ -1508,7 +1509,13 @@ gnutls_x509_crt_set_authority_info_access(gnutls_x509_crt_t crt,
 		}
 	}
 
-	ret = gnutls_x509_aia_set(aia_ctx, what, GNUTLS_SAN_URI, data);
+	if (what == GNUTLS_IA_OCSP_URI)
+		oid = GNUTLS_OID_AD_OCSP;
+	else if (what == GNUTLS_IA_CAISSUERS_URI)
+		oid = GNUTLS_OID_AD_CAISSUERS;
+	else
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+	ret = gnutls_x509_aia_set(aia_ctx, oid, GNUTLS_SAN_URI, data);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;

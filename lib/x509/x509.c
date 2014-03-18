@@ -787,43 +787,6 @@ gnutls_x509_crt_get_serial(gnutls_x509_crt_t cert, void *result,
 	return 0;
 }
 
-static int copy_string(gnutls_datum_t* str, uint8_t *out, size_t *out_size)
-{
-unsigned size_to_check;
-
-	size_to_check = str->size + 1;
-
-	if ((unsigned) size_to_check > *out_size) {
-		gnutls_assert();
-		(*out_size) = size_to_check;
-		return GNUTLS_E_SHORT_MEMORY_BUFFER;
-	}
-
-	if (out != NULL) {
-		memcpy(out, str->data, str->size);
-		out[str->size] = 0;
-	}
-	*out_size = str->size;
-
-	return 0;
-}
-
-static int copy_data(gnutls_datum_t* str, uint8_t *out, size_t *out_size)
-{
-	if ((unsigned) str->size > *out_size) {
-		gnutls_assert();
-		(*out_size) = str->size;
-		return GNUTLS_E_SHORT_MEMORY_BUFFER;
-	}
-
-	if (out != NULL) {
-		memcpy(out, str->data, str->size);
-	}
-	*out_size = str->size;
-
-	return 0;
-}
-
 /**
  * gnutls_x509_crt_get_subject_key_id:
  * @cert: should contain a #gnutls_x509_crt_t structure
@@ -867,7 +830,7 @@ gnutls_x509_crt_get_subject_key_id(gnutls_x509_crt_t cert, void *ret,
 		goto cleanup;
 	}
 
-	result = copy_data(&id, ret, ret_size);
+	result = _gnutls_copy_data(&id, ret, ret_size);
 	if (result < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -963,9 +926,9 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 	}
 
 	if (is_type_printable(san_type))
-		ret = copy_string(&san, alt, alt_size);
+		ret = _gnutls_copy_string(&san, alt, alt_size);
 	else
-		ret = copy_data(&san, alt, alt_size);
+		ret = _gnutls_copy_data(&san, alt, alt_size);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -974,7 +937,7 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 	if (alt_type)
 		*alt_type = san_type;
 
-	ret = copy_data(&iserial, serial, serial_size);
+	ret = _gnutls_copy_data(&iserial, serial, serial_size);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1060,7 +1023,7 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 		goto cleanup;
 	}
 
-	ret = copy_data(&l_id, id, id_size);
+	ret = _gnutls_copy_data(&l_id, id, id_size);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1285,9 +1248,9 @@ _gnutls_parse_general_name(ASN1_TYPE src, const char *src_name,
 	type = ret;
 
 	if (is_type_printable(type)) {
-		ret = copy_string(&res, name, name_size);
+		ret = _gnutls_copy_string(&res, name, name_size);
 	} else {
-		ret = copy_data(&res, name, name_size);
+		ret = _gnutls_copy_data(&res, name, name_size);
 	}
 
 	if (ret < 0) {
@@ -1354,9 +1317,9 @@ get_alt_name(gnutls_x509_crt_t cert, const char *extension_id,
 		*alt_type = type;
 
 	if (is_type_printable(type)) {
-		ret = copy_string(&res, alt, alt_size);
+		ret = _gnutls_copy_string(&res, alt, alt_size);
 	} else {
-		ret = copy_data(&res, alt, alt_size);
+		ret = _gnutls_copy_data(&res, alt, alt_size);
 	}
 
 	if (ret < 0) {
@@ -2013,7 +1976,7 @@ gnutls_x509_crt_get_extension_oid(gnutls_x509_crt_t cert, int indx,
  * This function will return the requested extension OID in the
  * certificate, and the critical flag for it.  The extension OID will
  * be stored as a string in the provided buffer.  Use
- * gnutls_x509_crt_get_extension_data() to extract the data.
+ * gnutls_x509_crt_get_extension() to extract the data.
  *
  * If the buffer provided is not long enough to hold the output, then
  * @oid_size is updated and %GNUTLS_E_SHORT_MEMORY_BUFFER will be
@@ -2082,7 +2045,7 @@ gnutls_x509_crt_get_extension_info(gnutls_x509_crt_t cert, int indx,
  * @sizeof_data: initially holds the size of @oid
  *
  * This function will return the requested extension data in the
- * certificate.  The extension data will be stored as a string in the
+ * certificate.  The extension data will be stored in the
  * provided buffer.
  *
  * Use gnutls_x509_crt_get_extension_info() to extract the OID and
@@ -2919,7 +2882,7 @@ gnutls_x509_crt_get_crl_dist_points(gnutls_x509_crt_t cert,
 		goto cleanup;
 	}
 
-	ret = copy_string(&t_san, san, san_size);
+	ret = _gnutls_copy_string(&t_san, san, san_size);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -3501,7 +3464,7 @@ gnutls_x509_crt_get_issuer_unique_id(gnutls_x509_crt_t crt, char *buf,
 }
 
 static int
-_gnutls_parse_aia(ASN1_TYPE src,
+legacy_parse_aia(ASN1_TYPE src,
 		  unsigned int seq, int what, gnutls_datum_t * data)
 {
 	int len;
@@ -3528,7 +3491,7 @@ _gnutls_parse_aia(ASN1_TYPE src,
 		if (oid == NULL)
 			oid = GNUTLS_OID_AD_OCSP;
 		{
-			char tmpoid[20];
+			char tmpoid[MAX_OID_SIZE];
 			snprintf(nptr, sizeof(nptr), "?%u.accessMethod",
 				 seq);
 			len = sizeof(tmpoid);
@@ -3605,18 +3568,12 @@ _gnutls_parse_aia(ASN1_TYPE src,
  * @data: output data to be freed with gnutls_free().
  * @critical: pointer to output integer that is set to non-0 if the extension is marked as critical (may be %NULL)
  *
+ * Note that a simpler API to access the authority info data is provided
+ * by gnutls_x509_aia_get() and gnutls_x509_ext_get_aia().
+ * 
  * This function extracts the Authority Information Access (AIA)
  * extension, see RFC 5280 section 4.2.2.1 for more information.  The
- * AIA extension holds a sequence of AccessDescription (AD) data:
- *
- * <informalexample><programlisting>
- * AuthorityInfoAccessSyntax  ::=
- *         SEQUENCE SIZE (1..MAX) OF AccessDescription
- *
- * AccessDescription  ::=  SEQUENCE {
- *         accessMethod          OBJECT IDENTIFIER,
- *         accessLocation        GeneralName  }
- * </programlisting></informalexample>
+ * AIA extension holds a sequence of AccessDescription (AD) data.
  *
  * The @seq input parameter is used to indicate which member of the
  * sequence the caller is interested in.  The first member is 0, the
@@ -3712,7 +3669,7 @@ gnutls_x509_crt_get_authority_info_access(gnutls_x509_crt_t crt,
 		return _gnutls_asn2err(ret);
 	}
 
-	ret = _gnutls_parse_aia(c2, seq, what, data);
+	ret = legacy_parse_aia(c2, seq, what, data);
 
 	asn1_delete_structure(&c2);
 	if (ret < 0)

@@ -954,6 +954,9 @@ GNUTLS_3_1_0 {
 	gnutls_x509_name_constraints_check;
 	gnutls_x509_name_constraints_check_crt;
 	gnutls_srp_set_server_fake_salt_seed;
+	gnutls_x509_crt_get_extension_data2;
+	gnutls_x509_crq_get_extension_data2;
+	gnutls_x509_crl_get_extension_data2;
 } GNUTLS_3_0_0;
 
 GNUTLS_PRIVATE {

@@ -56,20 +56,20 @@ int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t,
 #define gnutls_x509_ext_get_issuer_alt_name gnutls_x509_ext_get_subject_alt_name
 #define gnutls_x509_ext_set_issuer_alt_name gnutls_x509_ext_set_subject_alt_name
 
-typedef struct gnutls_crl_dist_points_st *gnutls_crl_dist_points_t;
+typedef struct gnutls_x509_crl_dist_points_st *gnutls_x509_crl_dist_points_t;
 
-int gnutls_crl_dist_points_init(gnutls_crl_dist_points_t *);
-void gnutls_crl_dist_points_deinit(gnutls_crl_dist_points_t);
-int gnutls_crl_dist_points_get(gnutls_crl_dist_points_t, unsigned int seq,
+int gnutls_x509_crl_dist_points_init(gnutls_x509_crl_dist_points_t *);
+void gnutls_x509_crl_dist_points_deinit(gnutls_x509_crl_dist_points_t);
+int gnutls_x509_crl_dist_points_get(gnutls_x509_crl_dist_points_t, unsigned int seq,
 				  unsigned int *type,
 				  gnutls_datum_t *dist, unsigned int *reason_flags);
-int gnutls_crl_dist_points_set(gnutls_crl_dist_points_t,
+int gnutls_x509_crl_dist_points_set(gnutls_x509_crl_dist_points_t,
 				 gnutls_x509_subject_alt_name_t type,
 				 const gnutls_datum_t *dist, unsigned int reason_flags);
 
 int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
-					gnutls_crl_dist_points_t dp);
-int gnutls_x509_ext_set_crl_dist_points(gnutls_crl_dist_points_t dp,
+					gnutls_x509_crl_dist_points_t dp);
+int gnutls_x509_ext_set_crl_dist_points(gnutls_x509_crl_dist_points_t dp,
 					gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
@@ -78,20 +78,22 @@ int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
 int gnutls_x509_ext_set_name_constraints(gnutls_x509_name_constraints_t nc,
 					 gnutls_datum_t * ext);
 
-typedef struct gnutls_aia_st *gnutls_aia_t;
+typedef struct gnutls_x509_aia_st *gnutls_x509_aia_t;
 
-int gnutls_aia_init(gnutls_aia_t *);
-void gnutls_aia_deinit(gnutls_aia_t);
-int gnutls_aia_get(gnutls_aia_t, unsigned int seq,
-		   gnutls_info_access_what_t what,
-		   gnutls_datum_t *data);
-int gnutls_aia_set(gnutls_aia_t,
-		   gnutls_info_access_what_t what,
-		   const gnutls_datum_t *data);
+int gnutls_x509_aia_init(gnutls_x509_aia_t *);
+void gnutls_x509_aia_deinit(gnutls_x509_aia_t);
+int gnutls_x509_aia_get(gnutls_x509_aia_t aia, unsigned int seq,
+			gnutls_datum_t *oid,
+			unsigned *san_type,
+			gnutls_datum_t *san);
+int gnutls_x509_aia_set(gnutls_x509_aia_t aia,
+			const char *oid,
+			unsigned san_type,
+			const gnutls_datum_t * san);
 
-int gnutls_x509_ext_get_authority_info_access(const gnutls_datum_t * ext,
-				gnutls_aia_t);
-int gnutls_x509_ext_set_authority_info_access(gnutls_aia_t aia,
+int gnutls_x509_ext_get_aia(const gnutls_datum_t * ext,
+				gnutls_x509_aia_t);
+int gnutls_x509_ext_set_aia(gnutls_x509_aia_t aia,
 					      gnutls_datum_t * ext);
 
 int gnutls_x509_ext_get_subject_key_id(const gnutls_datum_t * ext,
@@ -99,26 +101,26 @@ int gnutls_x509_ext_get_subject_key_id(const gnutls_datum_t * ext,
 int gnutls_x509_ext_set_subject_key_id(const gnutls_datum_t * id,
 				       gnutls_datum_t * ext);
 
-typedef struct gnutls_aki_st *gnutls_aki_t;
+typedef struct gnutls_x509_aki_st *gnutls_x509_aki_t;
 
-int gnutls_x509_ext_set_authority_key_id(gnutls_aki_t,
+int gnutls_x509_ext_set_authority_key_id(gnutls_x509_aki_t,
 					 gnutls_datum_t * ext);
 int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
-					 gnutls_aki_t);
+					 gnutls_x509_aki_t);
 					 
-int gnutls_aki_init(gnutls_aki_t *);
-int gnutls_aki_get_id(gnutls_aki_t, gnutls_datum_t *id);
-int gnutls_aki_get_cert_issuer(gnutls_aki_t aki, unsigned int seq,
+int gnutls_x509_aki_init(gnutls_x509_aki_t *);
+int gnutls_x509_aki_get_id(gnutls_x509_aki_t, gnutls_datum_t *id);
+int gnutls_x509_aki_get_cert_issuer(gnutls_x509_aki_t aki, unsigned int seq,
 				 unsigned int *san_type, gnutls_datum_t * san,
 				 gnutls_datum_t *othername_oid,
 				 gnutls_datum_t *serial);
-int gnutls_aki_set_id(gnutls_aki_t aki, const gnutls_datum_t *id);
-int gnutls_aki_set_cert_issuer(gnutls_aki_t aki, 
+int gnutls_x509_aki_set_id(gnutls_x509_aki_t aki, const gnutls_datum_t *id);
+int gnutls_x509_aki_set_cert_issuer(gnutls_x509_aki_t aki, 
 				 unsigned int san_type, 
 				 const gnutls_datum_t * san,
 				 const char *othername_oid,
 				 const gnutls_datum_t * serial);
-void gnutls_aki_deinit(gnutls_aki_t);
+void gnutls_x509_aki_deinit(gnutls_x509_aki_t);
 
 int gnutls_x509_ext_get_private_key_usage_period(const gnutls_datum_t * ext,
 						 time_t * activation,

@@ -179,11 +179,6 @@ int _gnutls_asn1_encode_privkey(gnutls_pk_algorithm_t pk, ASN1_TYPE * c2,
 				gnutls_pk_params_st * params);
 
 /* extensions.c */
-int _gnutls_x509_crl_get_extension(gnutls_x509_crl_t crl,
-				   const char *extension_id, int indx,
-				   gnutls_datum_t * ret,
-				   unsigned int *_critical);
-
 int _gnutls_x509_crl_get_extension_oid(gnutls_x509_crl_t crl,
 				       int indx, void *oid,
 				       size_t * sizeof_oid);
@@ -193,10 +188,17 @@ int _gnutls_x509_crl_set_extension(gnutls_x509_crl_t crl,
 				   const gnutls_datum_t * ext_data,
 				   unsigned int critical);
 
-int _gnutls_x509_crt_get_extension(gnutls_x509_crt_t cert,
-				   const char *extension_id, int indx,
-				   gnutls_datum_t * ret,
-				   unsigned int *critical);
+int
+_gnutls_x509_crl_get_extension(gnutls_x509_crl_t crl,
+			       const char *extension_id, int indx,
+			       gnutls_datum_t * data,
+			       unsigned int *critical);
+
+int
+_gnutls_x509_crt_get_extension(gnutls_x509_crt_t cert,
+			       const char *extension_id, int indx,
+			       gnutls_datum_t * data, unsigned int *critical);
+
 int _gnutls_x509_crt_get_extension_oid(gnutls_x509_crt_t cert,
 				       int indx, void *ret,
 				       size_t * ret_size);

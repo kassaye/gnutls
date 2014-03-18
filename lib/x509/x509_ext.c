@@ -338,7 +338,7 @@ int gnutls_x509_ext_set_subject_alt_names(gnutls_subject_alt_names_t sans,
 }
 
 /**
- * gnutls_x509_crt_get_name_constraints:
+ * gnutls_x509_ext_get_name_constraints:
  * @ext: a DER encoded extension
  * @nc: The nameconstraints intermediate structure
  * @flags: zero or %GNUTLS_NAME_CONSTRAINTS_FLAG_APPEND
@@ -415,8 +415,8 @@ int gnutls_x509_ext_get_name_constraints(const gnutls_datum_t * ext,
  * @ext: The DER-encoded extension data; must be freed using gnutls_free().
  *
  * This function will convert the provided name constraints structure to a
- * DER-encoded PKIX NameConstraints extension. The output data in @ext will be allocated using
- * gnutls_malloc().
+ * DER-encoded PKIX NameConstraints (2.5.29.30) extension. The output data in 
+ * @ext will be allocated usin gnutls_malloc().
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
  *
@@ -2460,7 +2460,7 @@ int gnutls_x509_ext_set_crl_dist_points(gnutls_x509_crl_dist_points_t cdp,
 
 struct gnutls_x509_aia_st {
 	struct {
-		gnutls_info_access_what_t what;
+		gnutls_datum_t oid;
 		unsigned int san_type;
 		gnutls_datum_t san;
 	} *aia;
@@ -2500,6 +2500,7 @@ void gnutls_x509_aia_deinit(gnutls_x509_aia_t aia)
 
 	for (i = 0; i < aia->size; i++) {
 		gnutls_free(aia->aia[i].san.data);
+		gnutls_free(aia->aia[i].oid.data);
 	}
 	gnutls_free(aia->aia);
 	gnutls_free(aia);
@@ -2509,38 +2510,41 @@ void gnutls_x509_aia_deinit(gnutls_x509_aia_t aia)
  * gnutls_x509_aia_get:
  * @aia: The authority info access structure
  * @seq: specifies the sequence number of the access descriptor (0 for the first one, 1 for the second etc.)
- * @what: what data are available, a #gnutls_info_access_what_t type (may be null).
+ * @oid: the type of available data; to be treated as constant.
  * @san_type: Will hold the type of the name of %gnutls_subject_alt_names_t (may be null).
  * @san: the access location name; to be treated as constant (may be null).
  *
- * This function extracts the Authority Information Access (AIA)
- * extension, see RFC 5280 section 4.2.2.1 for more information.  The
- * AIA extension holds a sequence of AccessDescription (AD) data:
+ * This function reads from the Authority Information Access structure.
  *
  * The @seq input parameter is used to indicate which member of the
  * sequence the caller is interested in.  The first member is 0, the
  * second member 1 and so on.  When the @seq value is out of bounds,
  * %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE is returned.
  *
+ * Typically @oid is %GNUTLS_OID_AD_CAISSUERS or %GNUTLS_OID_AD_OCSP.
+ *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
  *
  * Since: 3.3.0
  **/
 int gnutls_x509_aia_get(gnutls_x509_aia_t aia, unsigned int seq,
-			unsigned *what,
+			gnutls_datum_t *oid,
 			unsigned *san_type,
 			gnutls_datum_t *san)
 {
 	if (seq >= aia->size)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 
-	if (what)
-		*what = aia->aia[seq].what;
 	if (san_type)
 		*san_type = aia->aia[seq].san_type;
 	if (san) {
 		san->data = aia->aia[seq].san.data;
 		san->size = aia->aia[seq].san.size;
+	}
+
+	if (oid) {
+		oid->data = aia->aia[seq].oid.data;
+		oid->size = aia->aia[seq].oid.size;
 	}
 
 	return 0;
@@ -2549,22 +2553,23 @@ int gnutls_x509_aia_get(gnutls_x509_aia_t aia, unsigned int seq,
 /**
  * gnutls_x509_aia_set:
  * @aia: The authority info access structure
- * @what: what data are available, a #gnutls_info_access_what_t type.
+ * @oid: the type of data.
  * @san_type: The type of the name (of %gnutls_subject_alt_names_t)
  * @san: The alternative name data
  * @othername_oid: The object identifier if @san_type is %GNUTLS_SAN_OTHERNAME
  *
  * This function will store the specified alternative name in
- * the @aia structure. The available values for @what are the members
- * of #gnutls_info_access_what_t with value larger than 10000. That is:
- * %GNUTLS_IA_OCSP_URI and %GNUTLS_IA_CAISSUERS_URI.
+ * the @aia structure. 
+ *
+ * Typically the value for @oid should be %GNUTLS_OID_AD_OCSP, or
+ * %GNUTLS_OID_AD_CAISSUERS.
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0), otherwise a negative error value.
  *
  * Since: 3.3.0
  **/
 int gnutls_x509_aia_set(gnutls_x509_aia_t aia,
-			unsigned what,
+			const char *oid,
 			unsigned san_type,
 			const gnutls_datum_t * san)
 {
@@ -2579,9 +2584,14 @@ int gnutls_x509_aia_set(gnutls_x509_aia_t aia,
 	aia->aia = tmp;
 	indx = aia->size;
 	
-
-	aia->aia[indx].what = what;
 	aia->aia[indx].san_type = san_type;
+	if (oid) {
+		aia->aia[indx].oid.data = (void*)gnutls_strdup(oid);
+		aia->aia[indx].oid.size = strlen(oid);
+	} else {
+		aia->aia[indx].oid.data = NULL;
+		aia->aia[indx].oid.size = 0;
+	}
 
 	ret = _gnutls_set_datum(&aia->aia[indx].san, san->data, san->size);
 	if (ret < 0)
@@ -2613,6 +2623,11 @@ static int parse_aia(ASN1_TYPE c2, gnutls_x509_aia_t aia)
 			break;
 		}
 
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			return _gnutls_asn2err(result);
+		}
+
 		indx = aia->size;
 		tmp = gnutls_realloc(aia->aia, (aia->size + 1) * sizeof(aia->aia[0]));
 		if (tmp == NULL) {
@@ -2620,19 +2635,8 @@ static int parse_aia(ASN1_TYPE c2, gnutls_x509_aia_t aia)
 		}
 		aia->aia = tmp;
 
-		if (result != ASN1_MEM_ERROR) {
-			gnutls_assert();
-			return _gnutls_asn2err(result);
-		}
-
-		if (strcmp(tmpoid, GNUTLS_OID_AD_CAISSUERS) == 0) {
-			aia->aia[indx].what = GNUTLS_IA_CAISSUERS_URI;
-		} else if (strcmp(tmpoid, GNUTLS_OID_AD_CAISSUERS) == 0) {
-			aia->aia[indx].what = GNUTLS_IA_OCSP_URI;
-		} else {
-			_gnutls_debug_log("unknown access method OID %s\n", tmpoid);
-			aia->aia[indx].what = GNUTLS_IA_UNKNOWN;
-		}
+		aia->aia[indx].oid.data = (void*)gnutls_strdup(tmpoid);
+		aia->aia[indx].oid.size = strlen(tmpoid);
 
 		snprintf(nptr, sizeof(nptr), "?%u.accessLocation", i);
 
@@ -2703,18 +2707,6 @@ int gnutls_x509_ext_get_aia(const gnutls_datum_t * ext,
 
 }
 
-static const char *what_to_oid(int what)
-{
-	switch (what) {
-	case GNUTLS_IA_OCSP_URI:
-		return GNUTLS_OID_AD_OCSP;
-	case GNUTLS_IA_CAISSUERS_URI:
-		return GNUTLS_OID_AD_CAISSUERS;
-	default:
-		return NULL;
-	}
-}
-
 /**
  * gnutls_x509_ext_set_aia:
  * @aia: The authority info access structure
@@ -2734,7 +2726,6 @@ int gnutls_x509_ext_set_aia(gnutls_x509_aia_t aia,
 {
 	int ret, result;
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
-	const char *oid;
 	unsigned int i;
 
 	ret = asn1_create_element(_gnutls_get_pkix(),
@@ -2754,15 +2745,9 @@ int gnutls_x509_ext_set_aia(gnutls_x509_aia_t aia,
 			goto cleanup;
 		}
 
-		oid = what_to_oid(aia->aia[i].what);
-		if (oid == NULL) {
-			ret = gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
-			goto cleanup;
-		}
-
 		/* 2. Add the OID.
 		 */
-		result = asn1_write_value(c2, "?LAST.accessMethod", oid, 1);
+		result = asn1_write_value(c2, "?LAST.accessMethod", aia->aia[i].oid.data, 1);
 		if (result != ASN1_SUCCESS) {
 			gnutls_assert();
 			ret = _gnutls_asn2err(result);

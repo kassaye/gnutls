@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2012 Free Software Foundation, Inc.
+ * Copyright (C) 2003-2014 Free Software Foundation, Inc.
  *
  * Author: Nikos Mavrogiannopoulos
  *
@@ -29,6 +29,7 @@
 #include <libtasn1.h>
 #include <common.h>
 #include <gnutls/x509-ext.h>
+#include <gnutls/x509.h>
 #include <x509_int.h>
 #include <gnutls_datum.h>
 
@@ -130,35 +131,95 @@ get_extension(ASN1_TYPE asn, const char *root,
 	}
 }
 
-/* This function will attempt to return the requested extension found in
- * the given X509v3 certificate. The return value is allocated and stored into
- * ret.
- *
- * Critical will be either 0 or 1.
- *
- * If the extension does not exist, GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE will
- * be returned.
- */
+static int
+get_indx_extension(ASN1_TYPE asn, const char *root,
+	      int indx, gnutls_datum_t * out)
+{
+	char name[ASN1_MAX_NAME_SIZE];
+	int ret;
+
+	out->data = NULL;
+	out->size = 0;
+
+	snprintf(name, sizeof(name), "%s.?%u.extnValue", root, indx+1);
+
+	ret = _gnutls_x509_read_value(asn, name, out);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	return 0;
+}
+
 int
 _gnutls_x509_crt_get_extension(gnutls_x509_crt_t cert,
 			       const char *extension_id, int indx,
-			       gnutls_datum_t * ret,
-			       unsigned int *_critical)
+			       gnutls_datum_t * data, unsigned int *critical)
 {
 	return get_extension(cert->cert, "tbsCertificate.extensions",
-			     extension_id, indx, ret, _critical);
+			     extension_id, indx, data, critical);
+}
+
+/**
+ * gnutls_x509_crt_get_extension_data2:
+ * @cert: should contain a #gnutls_x509_crt_t structure
+ * @indx: Specifies which extension OID to read. Use (0) to get the first one.
+ * @data: will contain the extension DER-encoded data
+ *
+ * This function will return the requested by the index extension data in the
+ * certificate.  The extension data will be allocated using
+ * gnutls_malloc().
+ *
+ * Use gnutls_x509_crt_get_extension_info() to extract the OID.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned,
+ *   otherwise a negative error code is returned.  If you have reached the
+ *   last extension available %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ *   will be returned.
+ **/
+int
+gnutls_x509_crt_get_extension_data2(gnutls_x509_crt_t cert,
+			       unsigned indx,
+			       gnutls_datum_t * data)
+{
+	return get_indx_extension(cert->cert, "tbsCertificate.extensions",
+			     indx, data);
 }
 
 int
 _gnutls_x509_crl_get_extension(gnutls_x509_crl_t crl,
 			       const char *extension_id, int indx,
-			       gnutls_datum_t * ret,
-			       unsigned int *_critical)
+			       gnutls_datum_t * data,
+			       unsigned int *critical)
 {
 	return get_extension(crl->crl, "tbsCertList.crlExtensions",
-			     extension_id, indx, ret, _critical);
+			     extension_id, indx, data, critical);
 }
 
+/**
+ * gnutls_x509_crl_get_extension_data2:
+ * @crl: should contain a #gnutls_x509_crl_t structure
+ * @indx: Specifies which extension OID to read. Use (0) to get the first one.
+ * @data: will contain the extension DER-encoded data
+ *
+ * This function will return the requested by the index extension data in the
+ * certificate revocation list.  The extension data will be allocated using
+ * gnutls_malloc().
+ *
+ * Use gnutls_x509_crt_get_extension_info() to extract the OID.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned,
+ *   otherwise a negative error code is returned.  If you have reached the
+ *   last extension available %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ *   will be returned.
+ **/
+int
+gnutls_x509_crl_get_extension_data2(gnutls_x509_crl_t crl,
+			       unsigned indx,
+			       gnutls_datum_t * data)
+{
+	return get_indx_extension(crl->crl, "tbsCertList.crlExtensions",
+			     indx, data);
+}
 
 /* This function will attempt to return the requested extension OID found in
  * the given X509v3 certificate. 
@@ -166,14 +227,13 @@ _gnutls_x509_crl_get_extension(gnutls_x509_crl_t crl,
  * If you have passed the last extension, GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE will
  * be returned.
  */
-static int
-get_extension_oid(ASN1_TYPE asn, const char *root,
-		  int indx, void *oid, size_t * sizeof_oid)
+static int get_extension_oid(ASN1_TYPE asn, const char *root,
+		  unsigned indx, void *oid, size_t * sizeof_oid)
 {
 	int k, result, len;
 	char name[ASN1_MAX_NAME_SIZE], name2[ASN1_MAX_NAME_SIZE];
 	char extnID[MAX_OID_SIZE];
-	int indx_counter = 0;
+	unsigned indx_counter = 0;
 
 	k = 0;
 	do {
