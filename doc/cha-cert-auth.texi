@@ -289,7 +289,7 @@ lengths of proxy chains.  Proxy Certificates are specified in
 @end float
 
 Note, that there are also direct APIs to access extensions that may
-are simpler to use for non-complex extensions. They are available
+be simpler to use for non-complex extensions. They are available
 in @code{x509.h} and some examples are listed below.
 @showfuncD{gnutls_x509_crt_get_basic_constraints,gnutls_x509_crt_set_basic_constraints,gnutls_x509_crt_get_key_usage,gnutls_x509_crt_set_key_usage}
 
