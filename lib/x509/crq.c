@@ -1491,7 +1491,7 @@ gnutls_x509_crq_get_extension_data(gnutls_x509_crq_t crq, int indx,
 		return gnutls_assert_val(ret);
 
 	ret = _gnutls_copy_data(&raw, data, sizeof_data);
-	if (ret == GNUTLS_E_SHORT_MEMORY_BUFFER)
+	if (ret == GNUTLS_E_SHORT_MEMORY_BUFFER && data == NULL)
 		ret = 0;
 	gnutls_free(raw.data);
 	return ret;
