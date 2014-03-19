@@ -1332,84 +1332,63 @@ int
 gnutls_x509_crt_set_key_purpose_oid(gnutls_x509_crt_t cert,
 				    const void *oid, unsigned int critical)
 {
-	int result;
-	gnutls_datum_t old_id, der_data;
-	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	int ret;
+	gnutls_datum_t old_id = {NULL,0};
+	gnutls_datum_t der = {NULL,0};
+	gnutls_x509_key_purposes_t p = NULL;
 
 	if (cert == NULL) {
 		gnutls_assert();
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
-	result = asn1_create_element
-	    (_gnutls_get_pkix(), "PKIX1.ExtKeyUsageSyntax", &c2);
-	if (result != ASN1_SUCCESS) {
-		gnutls_assert();
-		return _gnutls_asn2err(result);
-	}
+	ret = gnutls_x509_key_purpose_init(&p);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
 
 	/* Check if the extension already exists.
 	 */
-	result =
+	ret =
 	    _gnutls_x509_crt_get_extension(cert, "2.5.29.37", 0, &old_id,
 					   NULL);
 
-	if (result >= 0) {
-		/* decode it.
-		 */
-		result =
-		    asn1_der_decoding(&c2, old_id.data, old_id.size, NULL);
-		_gnutls_free_datum(&old_id);
-
-		if (result != ASN1_SUCCESS) {
+	if (ret >= 0) {
+		ret = gnutls_x509_ext_get_key_purposes(&old_id, p);
+		if (ret < 0) {
 			gnutls_assert();
-			asn1_delete_structure(&c2);
-			return _gnutls_asn2err(result);
+			goto cleanup;
 		}
-
 	}
 
-	/* generate the extension.
-	 */
-	/* 1. create a new element.
-	 */
-	result = asn1_write_value(c2, "", "NEW", 1);
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_x509_key_purpose_set(p, oid);
+	if (ret < 0) {
 		gnutls_assert();
-		asn1_delete_structure(&c2);
-		return _gnutls_asn2err(result);
+		goto cleanup;
 	}
 
-	/* 2. Add the OID.
-	 */
-	result = asn1_write_value(c2, "?LAST", oid, 1);
-	if (result != ASN1_SUCCESS) {
+	ret = gnutls_x509_ext_set_key_purposes(p, &der);
+	if (ret < 0) {
 		gnutls_assert();
-		asn1_delete_structure(&c2);
-		return _gnutls_asn2err(result);
+		goto cleanup;
 	}
 
-	result = _gnutls_x509_der_encode(c2, "", &der_data, 0);
-	asn1_delete_structure(&c2);
-
-	if (result != ASN1_SUCCESS) {
+	ret = _gnutls_x509_crt_set_extension(cert, "2.5.29.37",
+						&der, critical);
+	if (ret < 0) {
 		gnutls_assert();
-		return _gnutls_asn2err(result);
-	}
-
-	result = _gnutls_x509_crt_set_extension(cert, "2.5.29.37",
-						&der_data, critical);
-
-	_gnutls_free_datum(&der_data);
-
-	if (result < 0) {
-		gnutls_assert();
-		return result;
+		goto cleanup;
 	}
 
 	cert->use_extensions = 1;
 
-	return 0;
+	ret = 0;
+ cleanup:
+	_gnutls_free_datum(&der);
+	_gnutls_free_datum(&old_id);
+	if (p != NULL)
+		gnutls_x509_key_purpose_deinit(p);
+
+	return ret;
 
 }
 

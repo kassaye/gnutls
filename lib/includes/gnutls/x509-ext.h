@@ -134,6 +134,19 @@ int gnutls_x509_ext_get_basic_constraints(const gnutls_datum_t * ext,
 int gnutls_x509_ext_set_basic_constraints(unsigned int ca, int pathlen,
 					  gnutls_datum_t * ext);
 
+typedef struct gnutls_x509_key_purposes_st *gnutls_x509_key_purposes_t;
+
+int gnutls_x509_key_purpose_init(gnutls_x509_key_purposes_t *p);
+void gnutls_x509_key_purpose_deinit(gnutls_x509_key_purposes_t p);
+int gnutls_x509_key_purpose_set(gnutls_x509_key_purposes_t p, const char *oid);
+int gnutls_x509_key_purpose_get(gnutls_x509_key_purposes_t p, unsigned idx, gnutls_datum_t *oid);
+
+int gnutls_x509_ext_get_key_purposes(const gnutls_datum_t * ext,
+				     gnutls_x509_key_purposes_t);
+int gnutls_x509_ext_set_key_purposes(gnutls_x509_key_purposes_t,
+				     gnutls_datum_t * ext);
+
+
 int gnutls_x509_ext_get_key_usage(const gnutls_datum_t * ext,
 				  unsigned int *key_usage);
 int gnutls_x509_ext_set_key_usage(unsigned int key_usage,

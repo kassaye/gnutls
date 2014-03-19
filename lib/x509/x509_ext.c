@@ -2777,3 +2777,230 @@ int gnutls_x509_ext_set_aia(gnutls_x509_aia_t aia,
 
 	return ret;
 }
+
+
+struct gnutls_x509_key_purposes_st {
+	gnutls_datum_t oid[MAX_ENTRIES];
+	unsigned int size;
+};
+
+/**
+ * gnutls_subject_alt_names_init:
+ * @p: The key purposes structure
+ *
+ * This function will initialize an alternative names structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_key_purpose_init(gnutls_x509_key_purposes_t * p)
+{
+	*p = gnutls_calloc(1, sizeof(struct gnutls_x509_key_purposes_st));
+	if (*p == NULL) {
+		gnutls_assert();
+		return GNUTLS_E_MEMORY_ERROR;
+	}
+
+	return 0;
+}
+
+/**
+ * gnutls_x509_key_purpose_deinit:
+ * @p: The key purposes structure
+ *
+ * This function will deinitialize an alternative names structure.
+ *
+ * Since: 3.3.0
+ **/
+void gnutls_x509_key_purpose_deinit(gnutls_x509_key_purposes_t p)
+{
+	unsigned int i;
+
+	for (i = 0; i < p->size; i++) {
+		gnutls_free(p->oid[i].data);
+	}
+	gnutls_free(p);
+}
+
+/**
+ * gnutls_x509_key_purpose_set:
+ * @p: The key purposes structure
+ * @oid: The object identifier of the key purpose
+ *
+ * This function will store the specified key purpose in the
+ * purposes structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0), otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_key_purpose_set(gnutls_x509_key_purposes_t p, const char *oid)
+{
+	if (p->size + 1 > MAX_ENTRIES)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	p->oid[p->size].data = (void*)gnutls_strdup(oid);
+	if (p->oid[p->size].data == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+
+	p->oid[p->size].size = strlen(oid);
+	p->size++;
+
+	return 0;
+}
+
+/**
+ * gnutls_x509_key_purpose_get:
+ * @p: The key purposes structure
+ * @idx: The index of the key purpose to retrieve
+ * @oid: Will hold the object identifier of the key purpose (to be treated as constant)
+ *
+ * This function will retrieve the specified by the index key purpose in the
+ * purposes structure.
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
+ * if the index is out of bounds, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_key_purpose_get(gnutls_x509_key_purposes_t p, unsigned idx, gnutls_datum_t *oid)
+{
+	if (idx >= p->size)
+		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
+
+	oid->data = p->oid[idx].data;
+	oid->size = p->oid[idx].size;
+
+	return 0;
+}
+
+/**
+ * gnutls_x509_ext_get_key_purposes:
+ * @ext: The DER-encoded extension data
+ * @p: The key purposes structure
+ *
+ * This function will extract the key purposes in the provided DER-encoded
+ * ExtKeyUsageSyntax PKIX extension, to a %gnutls_x509_key_purposes_t structure. 
+ * The structure must be initialized.
+ * 
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_get_key_purposes(const gnutls_datum_t * ext,
+				     gnutls_x509_key_purposes_t p)
+{
+	char tmpstr[ASN1_MAX_NAME_SIZE];
+	int result, ret;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	gnutls_datum_t oid = {NULL, 0};
+	unsigned i;
+
+	result = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.ExtKeyUsageSyntax", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result = asn1_der_decoding(&c2, ext->data, ext->size, NULL);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	for (i=p->size;i<MAX_ENTRIES;i++) {
+		/* create a string like "?1"
+		 */
+		snprintf(tmpstr, sizeof(tmpstr), "?%u", i+1);
+
+		ret = _gnutls_x509_read_value(c2, tmpstr, &oid);
+		if (ret == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND) {
+			ret = 0;
+			break;
+		}
+
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+
+		p->oid[i].data = oid.data;
+		p->oid[i].size = oid.size;
+
+		oid.data = NULL;
+		p->size++;
+	}
+
+	ret = 0;
+ cleanup:
+	gnutls_free(oid.data);
+	asn1_delete_structure(&c2);
+
+	return ret;
+
+}
+
+/**
+ * gnutls_x509_ext_set_key_purposes:
+ * @p: The key purposes structure
+ * @ext: The DER-encoded extension data; must be freed using gnutls_free().
+ *
+ * This function will convert the key purposes structure to a
+ * DER-encoded PKIX ExtKeyUsageSyntax (2.5.29.37) extension. The output data in 
+ * @ext will be allocated usin gnutls_malloc().
+ *
+ * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a negative error value.
+ *
+ * Since: 3.3.0
+ **/
+int gnutls_x509_ext_set_key_purposes(gnutls_x509_key_purposes_t p,
+				     gnutls_datum_t * ext)
+{
+	int result, ret;
+	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
+	unsigned i;
+
+	result = asn1_create_element
+	    (_gnutls_get_pkix(), "PKIX1.ExtKeyUsageSyntax", &c2);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	/* generate the extension.
+	 */
+	for (i=0;i<p->size;i++) {
+		/* 1. create a new element.
+		 */
+		result = asn1_write_value(c2, "", "NEW", 1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			ret = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+
+		/* 2. Add the OID.
+		 */
+		result = asn1_write_value(c2, "?LAST", p->oid[i].data, 1);
+		if (result != ASN1_SUCCESS) {
+			gnutls_assert();
+			ret = _gnutls_asn2err(result);
+			goto cleanup;
+		}
+	}
+
+	ret = _gnutls_x509_der_encode(c2, "", ext, 0);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
+
+	ret = 0;
+
+ cleanup:
+	asn1_delete_structure(&c2);
+	return ret;
+}

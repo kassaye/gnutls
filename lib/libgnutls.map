@@ -1002,6 +1002,12 @@ GNUTLS_3_1_0 {
 	gnutls_x509_ext_get_policies;
 	gnutls_x509_ext_set_policies;
 	gnutls_x509_crt_set_issuer_alt_name;
+	gnutls_x509_key_purpose_init;
+	gnutls_x509_key_purpose_deinit;
+	gnutls_x509_key_purpose_set;
+	gnutls_x509_key_purpose_get;
+	gnutls_x509_ext_get_key_purposes;
+	gnutls_x509_ext_set_key_purposes;
 } GNUTLS_3_0_0;
 
 GNUTLS_PRIVATE {
