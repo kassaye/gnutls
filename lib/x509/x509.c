@@ -913,7 +913,7 @@ gnutls_x509_crt_get_authority_key_gn_serial(gnutls_x509_crt_t cert,
 		goto cleanup;
 	}
 
-	ret = gnutls_x509_ext_get_authority_key_id(&der, aki);
+	ret = gnutls_x509_ext_get_authority_key_id(&der, aki, 0);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1000,7 +1000,7 @@ gnutls_x509_crt_get_authority_key_id(gnutls_x509_crt_t cert, void *id,
 		goto cleanup;
 	}
 
-	ret = gnutls_x509_ext_get_authority_key_id(&der, aki);
+	ret = gnutls_x509_ext_get_authority_key_id(&der, aki, 0);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1301,7 +1301,7 @@ get_alt_name(gnutls_x509_crt_t cert, const char *extension_id,
 		goto cleanup;
 	}
 
-	ret = gnutls_x509_ext_get_subject_alt_names(&dnsname, sans);
+	ret = gnutls_x509_ext_get_subject_alt_names(&dnsname, sans, 0);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -1839,7 +1839,7 @@ gnutls_x509_crt_get_policy(gnutls_x509_crt_t crt, int indx,
 		goto cleanup;
 	}
 
-	ret = gnutls_x509_ext_get_policies(&tmpd, policies);
+	ret = gnutls_x509_ext_get_policies(&tmpd, policies, 0);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -2870,7 +2870,7 @@ gnutls_x509_crt_get_crl_dist_points(gnutls_x509_crt_t cert,
 		goto cleanup;
 	}
 
-	ret = gnutls_x509_ext_get_crl_dist_points(&dist_points, cdp);
+	ret = gnutls_x509_ext_get_crl_dist_points(&dist_points, cdp, 0);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
@@ -2956,7 +2956,7 @@ gnutls_x509_crt_get_key_purpose_oid(gnutls_x509_crt_t cert,
 		goto cleanup;
 	}
 	
-	ret = gnutls_x509_ext_get_key_purposes(&ext, p);
+	ret = gnutls_x509_ext_get_key_purposes(&ext, p, 0);
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;

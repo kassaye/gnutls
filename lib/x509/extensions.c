@@ -790,7 +790,7 @@ _gnutls_x509_ext_gen_subject_alt_name(gnutls_x509_subject_alt_name_t
 	if (prev_der_ext && prev_der_ext->data != NULL && 
 		prev_der_ext->size != 0) {
 
-		ret = gnutls_x509_ext_get_subject_alt_names(prev_der_ext, sans);
+		ret = gnutls_x509_ext_get_subject_alt_names(prev_der_ext, sans, 0);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;

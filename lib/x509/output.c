@@ -216,7 +216,7 @@ static void print_aia(gnutls_buffer_st * str, const gnutls_datum_t *der)
 	if (err < 0)
 		return;
 
-	err = gnutls_x509_ext_get_aia(der, aia);
+	err = gnutls_x509_ext_get_aia(der, aia, 0);
 	if (err < 0) {
 		addf(str, "error: get_aia: %s\n",
 		     gnutls_strerror(err));

@@ -206,6 +206,7 @@ int gnutls_subject_alt_names_set(gnutls_subject_alt_names_t sans,
  * gnutls_x509_ext_get_subject_alt_names:
  * @ext: The DER-encoded extension data
  * @sans: The alternative names structure
+ * @flags: should be zero
  *
  * This function will export the alternative names in the provided DER-encoded
  * SubjectAltName PKIX extension, to a %gnutls_subject_alt_names_t structure. The structure
@@ -219,7 +220,8 @@ int gnutls_subject_alt_names_set(gnutls_subject_alt_names_t sans,
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_subject_alt_names(const gnutls_datum_t * ext,
-					  gnutls_subject_alt_names_t sans)
+					  gnutls_subject_alt_names_t sans,
+					  unsigned int flags)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	int result, ret;
@@ -554,7 +556,8 @@ int gnutls_x509_ext_set_name_constraints(gnutls_x509_name_constraints_t nc,
  * @id: will contain the subject key ID
  *
  * This function will return the subject key ID stored in the provided
- * SubjectKeyIdentifier extension.
+ * SubjectKeyIdentifier extension. The ID will be allocated using
+ * gnutls_malloc().
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, %GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
  * if the extension is not present, otherwise a negative error value.
@@ -839,6 +842,7 @@ int gnutls_x509_aki_get_cert_issuer(gnutls_x509_aki_t aki, unsigned int seq,
  * gnutls_x509_ext_get_authority_key_id:
  * @ext: a DER encoded extension
  * @aki: An initialized authority key identifier structure
+ * @flags: should be zero
  *
  * This function will return the subject key ID stored in the provided
  * AuthorityKeyIdentifier extension.
@@ -849,7 +853,8 @@ int gnutls_x509_aki_get_cert_issuer(gnutls_x509_aki_t aki, unsigned int seq,
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_authority_key_id(const gnutls_datum_t * ext,
-					 gnutls_x509_aki_t aki)
+					 gnutls_x509_aki_t aki,
+					 unsigned int flags)
 {
 	int ret;
 	unsigned i;
@@ -1754,6 +1759,7 @@ int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
  * gnutls_x509_ext_get_policies:
  * @ext: the DER encoded extension data
  * @policies: A pointer to an initialized policies structures.
+ * @flags: should be zero
  *
  * This function will extract the certificate policy extension (2.5.29.32) 
  * and store it the provided structure.
@@ -1763,7 +1769,8 @@ int gnutls_x509_policies_set(gnutls_x509_policies_t policies,
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_policies(const gnutls_datum_t * ext,
-				 gnutls_x509_policies_t policies)
+				 gnutls_x509_policies_t policies,
+				 unsigned int flags)
 {
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
 	char tmpstr[128];
@@ -2252,6 +2259,7 @@ int gnutls_x509_crl_dist_points_set(gnutls_x509_crl_dist_points_t cdp,
  * gnutls_x509_ext_get_crl_dist_points:
  * @ext: the DER encoded extension data
  * @cdp: A pointer to an initialized CRL distribution points structure.
+ * @flags: should be zero
  *
  * This function will extract the CRL distribution points extension (2.5.29.31) 
  * and store it into the provided structure.
@@ -2261,7 +2269,8 @@ int gnutls_x509_crl_dist_points_set(gnutls_x509_crl_dist_points_t cdp,
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_crl_dist_points(const gnutls_datum_t * ext,
-					gnutls_x509_crl_dist_points_t cdp)
+					gnutls_x509_crl_dist_points_t cdp,
+					unsigned int flags)
 {
 	int result;
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
@@ -2660,6 +2669,7 @@ static int parse_aia(ASN1_TYPE c2, gnutls_x509_aia_t aia)
  * gnutls_x509_ext_get_aia:
  * @ext: The DER-encoded extension data
  * @aia: The authority info access structure
+ * @flags: should be zero
  *
  * This function extracts the Authority Information Access (AIA)
  * extension from the provided DER-encoded data; see RFC 5280 section 4.2.2.1 
@@ -2671,7 +2681,8 @@ static int parse_aia(ASN1_TYPE c2, gnutls_x509_aia_t aia)
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_aia(const gnutls_datum_t * ext,
-					      gnutls_x509_aia_t aia)
+					      gnutls_x509_aia_t aia,
+					      unsigned int flags)
 {
 	int ret;
 	ASN1_TYPE c2 = ASN1_TYPE_EMPTY;
@@ -2805,6 +2816,15 @@ int gnutls_x509_key_purpose_init(gnutls_x509_key_purposes_t * p)
 	return 0;
 }
 
+static void key_purposes_deinit(gnutls_x509_key_purposes_t p)
+{
+	unsigned int i;
+
+	for (i = 0; i < p->size; i++) {
+		gnutls_free(p->oid[i].data);
+	}
+}
+
 /**
  * gnutls_x509_key_purpose_deinit:
  * @p: The key purposes structure
@@ -2815,11 +2835,7 @@ int gnutls_x509_key_purpose_init(gnutls_x509_key_purposes_t * p)
  **/
 void gnutls_x509_key_purpose_deinit(gnutls_x509_key_purposes_t p)
 {
-	unsigned int i;
-
-	for (i = 0; i < p->size; i++) {
-		gnutls_free(p->oid[i].data);
-	}
+	key_purposes_deinit(p);
 	gnutls_free(p);
 }
 
@@ -2879,6 +2895,7 @@ int gnutls_x509_key_purpose_get(gnutls_x509_key_purposes_t p, unsigned idx, gnut
  * gnutls_x509_ext_get_key_purposes:
  * @ext: The DER-encoded extension data
  * @p: The key purposes structure
+ * @flags: should be zero
  *
  * This function will extract the key purposes in the provided DER-encoded
  * ExtKeyUsageSyntax PKIX extension, to a %gnutls_x509_key_purposes_t structure. 
@@ -2889,7 +2906,8 @@ int gnutls_x509_key_purpose_get(gnutls_x509_key_purposes_t p, unsigned idx, gnut
  * Since: 3.3.0
  **/
 int gnutls_x509_ext_get_key_purposes(const gnutls_datum_t * ext,
-				     gnutls_x509_key_purposes_t p)
+				     gnutls_x509_key_purposes_t p,
+				     unsigned int flags)
 {
 	char tmpstr[ASN1_MAX_NAME_SIZE];
 	int result, ret;
@@ -2911,7 +2929,11 @@ int gnutls_x509_ext_get_key_purposes(const gnutls_datum_t * ext,
 		goto cleanup;
 	}
 
-	for (i=p->size;i<MAX_ENTRIES;i++) {
+	key_purposes_deinit(p);
+	i = 0;
+	p->size = 0;
+
+	for (;i<MAX_ENTRIES;i++) {
 		/* create a string like "?1"
 		 */
 		snprintf(tmpstr, sizeof(tmpstr), "?%u", i+1);

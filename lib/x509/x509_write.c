@@ -1091,7 +1091,7 @@ gnutls_x509_crt_set_crl_dist_points2(gnutls_x509_crt_t crt,
 					   &critical);
 
 	if (ret >= 0 && old_der.data != NULL) {
-		ret = gnutls_x509_ext_get_crl_dist_points(&old_der, cdp);
+		ret = gnutls_x509_ext_get_crl_dist_points(&old_der, cdp, 0);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
@@ -1353,7 +1353,7 @@ gnutls_x509_crt_set_key_purpose_oid(gnutls_x509_crt_t cert,
 					   NULL);
 
 	if (ret >= 0) {
-		ret = gnutls_x509_ext_get_key_purposes(&old_id, p);
+		ret = gnutls_x509_ext_get_key_purposes(&old_id, p, 0);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
@@ -1481,7 +1481,7 @@ gnutls_x509_crt_set_authority_info_access(gnutls_x509_crt_t crt,
 	ret = _gnutls_x509_crt_get_extension(crt, GNUTLS_OID_AIA, 0, &der,
 					     &c);
 	if (ret >= 0) {		/* decode it */
-		ret = gnutls_x509_ext_get_aia(&der, aia_ctx);
+		ret = gnutls_x509_ext_get_aia(&der, aia_ctx, 0);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
@@ -1573,7 +1573,7 @@ gnutls_x509_crt_set_policy(gnutls_x509_crt_t crt,
 
 	if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		ret = gnutls_x509_ext_get_policies(&prev_der_data,
-			policies);
+			policies, 0);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
