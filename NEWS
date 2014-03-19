@@ -159,6 +159,12 @@ gnutls_x509_policies_get: Added
 gnutls_x509_policies_set: Added
 gnutls_x509_ext_get_policies: Added
 gnutls_x509_ext_set_policies: Added
+gnutls_x509_key_purpose_init: Added
+gnutls_x509_key_purpose_deinit: Added
+gnutls_x509_key_purpose_set: Added
+gnutls_x509_key_purpose_get: Added
+gnutls_x509_ext_get_key_purposes: Added
+gnutls_x509_ext_set_key_purposes: Added
 gnutls_digest_self_test: Added (conditionally)
 gnutls_mac_self_test: Added (conditionally)
 gnutls_pk_self_test: Added (conditionally)
