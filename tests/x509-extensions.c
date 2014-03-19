@@ -135,7 +135,7 @@ static int subject_alt_name(const gnutls_datum_t * der)
 		return ret;
 	}
 
-	ret = gnutls_x509_ext_get_subject_alt_names(der, san);
+	ret = gnutls_x509_ext_get_subject_alt_names(der, san, 0);
 	if (ret < 0) {
 		fprintf(stderr, "error in %d\n", __LINE__);
 		return ret;
@@ -227,6 +227,51 @@ static int subject_alt_name(const gnutls_datum_t * der)
 	return 0;
 }
 
+static int ext_key_usage(const gnutls_datum_t * der)
+{
+/*
+		Key Purpose (not critical):
+			OCSP signing.
+*/
+	int ret;
+	gnutls_x509_key_purposes_t p;
+	unsigned i = 0;
+	gnutls_datum_t oid;
+
+	ret = gnutls_x509_key_purpose_init(&p);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	ret = gnutls_x509_ext_get_key_purposes(der, p, 0);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	ret = gnutls_x509_key_purpose_get(p, i++, &oid);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+	
+	if (strcmp((char*)oid.data, "1.3.6.1.5.5.7.3.9") != 0) {
+		fprintf(stderr, "error in %d: %s\n", __LINE__, (char*)oid.data);
+		return -1;
+	}
+
+	ret = gnutls_x509_key_purpose_get(p, i++, &oid);
+	if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	gnutls_x509_key_purpose_deinit(p);
+	
+	return 0;
+}
+
 static int crt_policies(const gnutls_datum_t * der)
 {
 	int ret;
@@ -240,7 +285,7 @@ static int crt_policies(const gnutls_datum_t * der)
 		return ret;
 	}
 
-	ret = gnutls_x509_ext_get_policies(der, policies);
+	ret = gnutls_x509_ext_get_policies(der, policies, 0);
 	if (ret < 0) {
 		fprintf(stderr, "error in %d\n", __LINE__);
 		return ret;
@@ -313,7 +358,139 @@ static int crt_policies(const gnutls_datum_t * der)
 	return 0;
 }
 
-#if  0
+static int key_usage(const gnutls_datum_t * der)
+{
+/*
+		Key Usage (critical):
+			Certificate signing.
+*/
+	int ret;
+	unsigned int usage = 0;
+
+	ret = gnutls_x509_ext_get_key_usage(der, &usage);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (usage != GNUTLS_KEY_KEY_CERT_SIGN) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+	
+	return 0;
+}
+
+static int subject_key_id(const gnutls_datum_t * der)
+{
+/*
+		Subject Key Identifier (not critical):
+			5d40adf0ce9440958b7e99941d925422ca72365f
+*/
+	int ret;
+	gnutls_datum_t id;
+
+	ret = gnutls_x509_ext_get_subject_key_id(der, &id);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (id.size != 20 ||
+		memcmp(id.data, "\x5d\x40\xad\xf0\xce\x94\x40\x95\x8b\x7e\x99\x94\x1d\x92\x54\x22\xca\x72\x36\x5f", 20) != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+	gnutls_free(id.data);
+	
+	return 0;
+}
+
+static int crl_dist_points(const gnutls_datum_t * der)
+{
+	int ret;
+	gnutls_x509_crl_dist_points_t dp = NULL;
+	unsigned i = 0;
+	unsigned flags;
+	gnutls_datum_t url;
+	unsigned type;
+
+/*
+		CRL Distribution points (not critical):
+			URI: http://www.getcrl.crl/getcrl1/
+			URI: http://www.getcrl.crl/getcrl2/
+			URI: http://www.getcrl.crl/getcrl3/
+*/
+
+	ret = gnutls_x509_crl_dist_points_init(&dp);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	ret = gnutls_x509_ext_get_crl_dist_points(der, dp, 0);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+
+	ret = gnutls_x509_crl_dist_points_get(dp, i++, &type, &url, &flags);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (type != GNUTLS_SAN_URI || flags != 0 ||
+		strcmp((char*)url.data, "http://www.getcrl.crl/getcrl1/") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_crl_dist_points_get(dp, i++, &type, &url, &flags);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (type != GNUTLS_SAN_URI || flags != 0 ||
+		strcmp((char*)url.data, "http://www.getcrl.crl/getcrl2/") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_crl_dist_points_get(dp, i++, &type, &url, &flags);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (type != GNUTLS_SAN_URI || flags != 0 ||
+		strcmp((char*)url.data, "http://www.getcrl.crl/getcrl3/") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_crl_dist_points_get(dp, i++, &type, &url, &flags);
+	if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+	
+	gnutls_x509_crl_dist_points_deinit(dp);
+	
+	return 0;
+}
+
+static int name_constraints(const gnutls_datum_t * der)
+{
+	int ret;
+	gnutls_x509_name_constraints_t nc = NULL;
+	unsigned i = 0;
+	gnutls_datum_t name;
+	unsigned type;
+
+/*
 		Name Constraints (critical):
 			Permitted:
 				DNSname: example.com
@@ -321,35 +498,152 @@ static int crt_policies(const gnutls_datum_t * der)
 			Excluded:
 				DNSname: test.example.com
 				tRFC822Name: .example.com
-		Key Purpose (not critical):
-			OCSP signing.
-		Authority Information Access (not critical):
+*/
+
+	ret = gnutls_x509_name_constraints_init(&nc);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	ret = gnutls_x509_ext_get_name_constraints(der, nc, 0);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+
+	ret = gnutls_x509_name_constraints_get_permitted(nc, i++, &type, &name);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (type != GNUTLS_SAN_DNSNAME || name.size != 11 ||
+		strcmp((char*)name.data, "example.com") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_name_constraints_get_permitted(nc, i++, &type, &name);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (type != GNUTLS_SAN_RFC822NAME || name.size != 17 ||
+		strcmp((char*)name.data, "nmav@@example.net") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_name_constraints_get_permitted(nc, i++, &type, &name);
+	if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	i = 0;
+	ret = gnutls_x509_name_constraints_get_excluded(nc, i++, &type, &name);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (type != GNUTLS_SAN_DNSNAME || name.size != 16 ||
+		strcmp((char*)name.data, "test.example.com") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_name_constraints_get_excluded(nc, i++, &type, &name);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (type != GNUTLS_SAN_RFC822NAME || name.size != 12 ||
+		strcmp((char*)name.data, ".example.com") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_name_constraints_get_excluded(nc, i++, &type, &name);
+	if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+	
+	gnutls_x509_name_constraints_deinit(nc);
+	
+	return 0;
+}
+
+static int ext_aia(const gnutls_datum_t * der)
+{
+	int ret;
+	gnutls_x509_aia_t aia = NULL;
+	unsigned i = 0;
+	gnutls_datum_t oid;
+	gnutls_datum_t name;
+	unsigned type;
+
+/*		Authority Information Access (not critical):
 			Access Method: 1.3.6.1.5.5.7.48.1 (id-ad-ocsp)
 			Access Location URI: http://my.ocsp.server/ocsp
-		Key Usage (critical):
-			Certificate signing.
-		Subject Key Identifier (not critical):
-			5d40adf0ce9440958b7e99941d925422ca72365f
-		CRL Distribution points (not critical):
-			URI: http://www.getcrl.crl/getcrl1/
-			URI: http://www.getcrl.crl/getcrl2/
-			URI: http://www.getcrl.crl/getcrl3/
+*/
+	ret = gnutls_x509_aia_init(&aia);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
 
-#endif
+	ret = gnutls_x509_ext_get_aia(der, aia, 0);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+
+	ret = gnutls_x509_aia_get(aia, i++, &oid, &type, &name);
+	if (ret < 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return ret;
+	}
+
+	if (strcmp((char*)oid.data, "1.3.6.1.5.5.7.48.1") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	if (type != GNUTLS_SAN_URI || name.size != 26 ||
+		strcmp((char*)name.data, "http://my.ocsp.server/ocsp") != 0) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	ret = gnutls_x509_aia_get(aia, i++, &oid, &type, &name);
+	if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+		fprintf(stderr, "error in %d\n", __LINE__);
+		return -1;
+	}
+
+	gnutls_x509_aia_deinit(aia);
+	
+	return 0;
+}
 
 struct ext_handler_st handlers[] =
 {
 	{GNUTLS_X509EXT_OID_BASIC_CONSTRAINTS, basic_constraints, 1},
-	{GNUTLS_X509EXT_OID_SAN, subject_alt_name},
-	{GNUTLS_X509EXT_OID_CRT_POLICY, crt_policies},
-	{GNUTLS_X509EXT_OID_EXTENDED_KEY_USAGE, ext_key_usage},
-#if 0
-	{GNUTLS_X509EXT_OID_NAME_CONSTRAINTS, name_constraints},
-	{GNUTLS_X509EXT_OID_AUTHORITY_INFO_ACCESS, ext_aia},
-	{GNUTLS_X509EXT_OID_KEY_USAGE, key_usage},
-	{GNUTLS_X509EXT_OID_SUBJECT_KEY_ID, subject_key_id},
-	{GNUTLS_X509EXT_OID_CRL_DIST_POINTS, crl_dist_points},
-#endif
+	{GNUTLS_X509EXT_OID_SAN, subject_alt_name, 0},
+	{GNUTLS_X509EXT_OID_CRT_POLICY, crt_policies, 0},
+	{GNUTLS_X509EXT_OID_EXTENDED_KEY_USAGE, ext_key_usage, 0},
+	{GNUTLS_X509EXT_OID_KEY_USAGE, key_usage, 1},
+	{GNUTLS_X509EXT_OID_SUBJECT_KEY_ID, subject_key_id, 0},
+	{GNUTLS_X509EXT_OID_CRL_DIST_POINTS, crl_dist_points, 0},
+	{GNUTLS_X509EXT_OID_NAME_CONSTRAINTS, name_constraints, 1},
+	{GNUTLS_X509EXT_OID_AUTHORITY_INFO_ACCESS, ext_aia, 0},
 	{NULL, NULL}
 };
 
@@ -404,7 +698,7 @@ void doit(void)
 
 			if (strcmp(handlers[j].oid, oid) == 0) {
 				if (critical != handlers[j].critical) {
-					fail("error in %d (%s): %s\n", __LINE__, oid, gnutls_strerror(ret));
+					fail("error in %d (%s)\n", __LINE__, oid);
 				}
 
 				ret = handlers[j].handler(&ext);
