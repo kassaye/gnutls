@@ -36,15 +36,6 @@
 
 #ifdef ENABLE_OCSP
 
-typedef struct {
-	gnutls_datum_t *responder_id;
-	size_t responder_id_size;
-	gnutls_datum_t request_extensions;
-	gnutls_datum_t response;
-
-	unsigned int expect_cstatus;
-} status_request_ext_st;
-
 /*
   From RFC 6066.  Client sends:
 
@@ -66,7 +57,7 @@ typedef struct {
       opaque Extensions<0..2^16-1>;
 */
 
-static void deinit_responder_id(status_request_ext_st *priv)
+void _gnutls_deinit_responder_id(status_request_ext_st *priv)
 {
 unsigned i;
 
@@ -127,13 +118,18 @@ client_send(gnutls_session_t session,
 	return ret_len;
 }
 
-static int
-server_recv(gnutls_session_t session,
+int
+_gnutls_status_request_server_recv(gnutls_session_t session,
 	    status_request_ext_st * priv,
-	    const uint8_t * data, size_t size)
+	    const uint8_t * data, size_t size, unsigned v2)
 {
 	size_t i;
 	ssize_t data_size = size;
+
+	if (priv->status_type != 0) {
+		gnutls_assert();
+		return 0;
+	}
 
 	/* minimum message is type (1) + responder_id_list (2) +
 	   request_extension (2) = 5 */
@@ -143,12 +139,14 @@ server_recv(gnutls_session_t session,
 
 	/* We ignore non-ocsp CertificateStatusType.  The spec is unclear
 	   what should be done. */
-	if (data[0] != 0x01) {
+	if (data[0] != 0x01 && (v2 == 0 && data[0] != 0x02)) {
 		gnutls_assert();
 		_gnutls_handshake_log("EXT[%p]: unknown status_type %d\n",
 				      session, data[0]);
 		return 0;
 	}
+	priv->status_type = data[0];
+
 	DECR_LEN(data_size, 1);
 	data++;
 
@@ -162,7 +160,7 @@ server_recv(gnutls_session_t session,
 		    gnutls_assert_val(GNUTLS_E_RECEIVED_ILLEGAL_PARAMETER);
 
 	if (priv->responder_id != NULL)
-		deinit_responder_id(priv);
+		_gnutls_deinit_responder_id(priv);
 
 	priv->responder_id = gnutls_calloc(1, priv->responder_id_size
 					   * sizeof(*priv->responder_id));
@@ -218,7 +216,7 @@ server_send(gnutls_session_t session,
 		return gnutls_assert_val(GNUTLS_E_SUCCESS);
 
 	ret =
-	    cred->ocsp_func(session, cred->ocsp_func_ptr, &priv->response);
+	    cred->ocsp_func(session, cred->ocsp_func_ptr, &priv->raw_resp);
 	if (ret == GNUTLS_E_NO_CERTIFICATE_STATUS)
 		return 0;
 	else if (ret < 0)
@@ -227,16 +225,20 @@ server_send(gnutls_session_t session,
 	return GNUTLS_E_INT_RET_0;
 }
 
-static int
-client_recv(gnutls_session_t session,
+int
+_gnutls_status_request_client_recv(gnutls_session_t session,
 	    status_request_ext_st * priv,
-	    const uint8_t * data, size_t size)
+	    const uint8_t * data, size_t size, unsigned v2)
 {
 	if (size != 0)
 		return
 		    gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
 	else {
 		priv->expect_cstatus = 1;
+		if (v2)
+			priv->status_type = 0x2;
+		else
+			priv->status_type = 0x1;
 		return 0;
 	}
 }
@@ -289,9 +291,9 @@ _gnutls_status_request_recv_params(gnutls_session_t session,
 	priv = epriv.ptr;
 
 	if (session->security_parameters.entity == GNUTLS_CLIENT)
-		return client_recv(session, priv, data, size);
+		return _gnutls_status_request_client_recv(session, priv, data, size, 0);
 	else
-		return server_recv(session, priv, data, size);
+		return _gnutls_status_request_server_recv(session, priv, data, size, 0);
 }
 
 /**
@@ -339,6 +341,20 @@ gnutls_ocsp_status_request_enable_client(gnutls_session_t session,
 				     GNUTLS_EXTENSION_STATUS_REQUEST,
 				     epriv);
 
+	epriv.ptr = priv = gnutls_calloc(1, sizeof(*priv));
+	if (priv == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+
+	priv->responder_id = responder_id;
+	priv->responder_id_size = responder_id_size;
+	if (extensions) {
+		priv->request_extensions.data = extensions->data;
+		priv->request_extensions.size = extensions->size;
+	}
+	_gnutls_ext_set_session_data(session,
+				     GNUTLS_EXTENSION_STATUS_REQUEST_V2,
+				     epriv);
+
 	return 0;
 }
 
@@ -361,30 +377,7 @@ int
 gnutls_ocsp_status_request_get(gnutls_session_t session,
 			       gnutls_datum_t * response)
 {
-	status_request_ext_st *priv;
-	extension_priv_data_t epriv;
-	int ret;
-
-	if (session->security_parameters.entity == GNUTLS_SERVER)
-		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
-
-	ret = _gnutls_ext_get_session_data(session,
-					   GNUTLS_EXTENSION_STATUS_REQUEST,
-					   &epriv);
-	if (ret < 0)
-		return gnutls_assert_val(ret);
-
-	priv = epriv.ptr;
-
-	if (priv == NULL || priv->response.data == NULL)
-		return
-		    gnutls_assert_val
-		    (GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
-
-	response->data = priv->response.data;
-	response->size = priv->response.size;
-
-	return 0;
+	return gnutls_ocsp_status_request_get_multi(session, response, 0);
 }
 
 /**
@@ -469,33 +462,62 @@ gnutls_certificate_set_ocsp_status_request_file
 	return 0;
 }
 
-static void _gnutls_status_request_deinit_data(extension_priv_data_t epriv)
+void _gnutls_status_request_deinit_data(extension_priv_data_t epriv)
 {
 	status_request_ext_st *priv = epriv.ptr;
 
 	if (priv == NULL)
 		return;
 
-	deinit_responder_id(priv);
+	_gnutls_deinit_responder_id(priv);
 	gnutls_free(priv->request_extensions.data);
-	gnutls_free(priv->response.data);
+	gnutls_free(priv->raw_resp.data);
 	gnutls_free(priv);
 }
 
-static int
+static
+int _gnutls_status_request_decode_raw_resp(status_request_ext_st *priv)
+{
+	int len = priv->raw_resp.size;
+
+	if (priv->status_type == 0x01) {
+		priv->responses[0].data = priv->raw_resp.data;
+		priv->responses[0].size = priv->raw_resp.size;
+		priv->responses_size = 1;
+	} else {
+		uint8_t *data = priv->raw_resp.data;
+		unsigned i;
+
+		for (i=0;i<MAX_OCSP_RESPONSES;i++) {
+			if (len == 0)
+				break;
+			DECR_LEN(len, 2);
+			priv->responses[i].size = _gnutls_read_uint16(data);
+			data += 2;
+			DECR_LEN(len, priv->responses[i].size);
+			priv->responses[i].data = data;
+			data += priv->responses[i].size;
+			priv->responses_size++;
+		}
+	}
+	return 0;
+}
+
+int
 _gnutls_status_request_pack(extension_priv_data_t epriv,
 			    gnutls_buffer_st * ps)
 {
 	status_request_ext_st *priv = epriv.ptr;
 	int ret;
 
-	BUFFER_APPEND_PFX4(ps, priv->response.data, priv->response.size);
+	BUFFER_APPEND_NUM(ps, priv->status_type);
+	BUFFER_APPEND_PFX4(ps, priv->raw_resp.data, priv->raw_resp.size);
 
 	return 0;
 
 }
 
-static int
+int
 _gnutls_status_request_unpack(gnutls_buffer_st * ps,
 			      extension_priv_data_t * epriv)
 {
@@ -508,7 +530,13 @@ _gnutls_status_request_unpack(gnutls_buffer_st * ps,
 		return GNUTLS_E_MEMORY_ERROR;
 	}
 
-	BUFFER_POP_DATUM(ps, &priv->response);
+	BUFFER_POP_NUM(ps, priv->status_type);
+	BUFFER_POP_DATUM(ps, &priv->raw_resp);
+	ret = _gnutls_status_request_decode_raw_resp(priv);
+	if (ret < 0) {
+		gnutls_assert();
+		goto error;
+	}
 
 	epriv->ptr = priv;
 
@@ -538,6 +566,7 @@ _gnutls_send_server_certificate_status(gnutls_session_t session, int again)
 	mbuffer_st *bufel = NULL;
 	uint8_t *data;
 	int data_size = 0;
+	uint32_t magic;
 	int ret;
 	status_request_ext_st *priv = NULL;
 	extension_priv_data_t epriv;
@@ -550,22 +579,37 @@ _gnutls_send_server_certificate_status(gnutls_session_t session, int again)
 			return 0;
 		priv = epriv.ptr;
 
-		if (!priv->response.size)
+		if (priv->raw_resp.size < 4)
 			return 0;
 
-		data_size = priv->response.size + 4;
-		bufel =
-		    _gnutls_handshake_alloc(session, data_size);
-		if (!bufel)
-			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+		memcpy(&magic, priv->raw_resp.data, 4);
+		if (magic == GNUTLS_OCSP_MULTI_MAGIC) {
+			data_size = priv->raw_resp.size;
+			bufel =
+			    _gnutls_handshake_alloc(session, data_size);
+			if (!bufel)
+				return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
-		data = _mbuffer_get_udata_ptr(bufel);
+			data = _mbuffer_get_udata_ptr(bufel);
 
-		data[0] = 0x01;
-		_gnutls_write_uint24(priv->response.size, &data[1]);
-		memcpy(&data[4], priv->response.data, priv->response.size);
+			data[0] = 0x02;
+			_gnutls_write_uint24(priv->raw_resp.size-4, &data[1]);
+			memcpy(&data[4], priv->raw_resp.data+4, priv->raw_resp.size-4);
+		} else {
+			data_size = priv->raw_resp.size + 4;
+			bufel =
+			    _gnutls_handshake_alloc(session, data_size);
+			if (!bufel)
+				return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
-		_gnutls_free_datum(&priv->response);
+			data = _mbuffer_get_udata_ptr(bufel);
+
+			data[0] = 0x01;
+			_gnutls_write_uint24(priv->raw_resp.size, &data[1]);
+			memcpy(&data[4], priv->raw_resp.data, priv->raw_resp.size);
+		}
+
+		_gnutls_free_datum(&priv->raw_resp);
 	}
 	return _gnutls_send_handshake(session, data_size ? bufel : NULL,
 				      GNUTLS_HANDSHAKE_CERTIFICATE_STATUS);
@@ -611,9 +655,9 @@ int _gnutls_recv_server_certificate_status(gnutls_session_t session)
 		return
 		    gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
 
-	if (data[0] != 0x01) {
+	if (data[0] != priv->status_type) {
 		gnutls_assert();
-		_gnutls_handshake_log("EXT[%p]: unknown status_type %d\n",
+		_gnutls_handshake_log("EXT[%p]: unexpected status_type %d\n",
 				      session, data[0]);
 		return 0;
 	}
@@ -632,9 +676,17 @@ int _gnutls_recv_server_certificate_status(gnutls_session_t session)
 			GNUTLS_E_UNEXPECTED_PACKET_LENGTH;
 			goto error);
 
-	ret = _gnutls_set_datum(&priv->response, data, r_size);
-	if (ret < 0)
+	ret = _gnutls_set_datum(&priv->raw_resp, data, r_size);
+	if (ret < 0) {
+		gnutls_assert();
 		goto error;
+	}
+
+	ret = _gnutls_status_request_decode_raw_resp(priv);
+	if (ret < 0) {
+		gnutls_assert();
+		goto error;
+	}
 
 	ret = 0;
 

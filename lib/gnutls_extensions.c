@@ -40,6 +40,7 @@
 #include <ext/ecc.h>
 #include <ext/status_request.h>
 #include <ext/ext_master_secret.h>
+#include <ext/status_request_multi.h>
 #include <ext/srtp.h>
 #include <ext/alpn.h>
 #include <ext/dumbfw.h>
@@ -322,6 +323,10 @@ int _gnutls_ext_init(void)
 		return ret;
 
 #ifdef ENABLE_OCSP
+	ret = _gnutls_ext_register(&ext_mod_status_request_v2);
+	if (ret != GNUTLS_E_SUCCESS)
+		return ret;
+
 	ret = _gnutls_ext_register(&ext_mod_status_request);
 	if (ret != GNUTLS_E_SUCCESS)
 		return ret;
