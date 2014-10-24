@@ -285,6 +285,7 @@ typedef enum extensions_t {
 	GNUTLS_EXTENSION_HEARTBEAT = 15,
 	GNUTLS_EXTENSION_ALPN = 16,
 	GNUTLS_EXTENSION_DUMBFW = 21,
+	GNUTLS_EXTENSION_ETM = 22,
 	GNUTLS_EXTENSION_EXT_MASTER_SECRET = 23,
 	GNUTLS_EXTENSION_SESSION_TICKET = 35,
 	GNUTLS_EXTENSION_SAFE_RENEGOTIATION = 65281	/* aka: 0xff01 */
@@ -577,6 +578,8 @@ typedef struct {
 	 * draft-ietf-tls-session-hash-01
 	 */
 	uint8_t ext_master_secret;
+	/* encrypt-then-mac -> rfc7366 */
+	uint8_t etm;
 
 	/* Note: if you add anything in Security_Parameters struct, then
 	 * also modify CPY_COMMON in gnutls_constate.c, and gnutls_session_pack.c,
@@ -615,6 +618,7 @@ struct record_parameters_st {
 	gnutls_compression_method_t compression_algorithm;
 
 	const cipher_entry_st *cipher;
+	bool etm;
 	const mac_entry_st *mac;
 
 	/* for DTLS */

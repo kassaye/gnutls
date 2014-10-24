@@ -206,13 +206,18 @@ calc_enc_length_block(gnutls_session_t session,
 		      const version_entry_st * ver,
 		      int data_size,
 		      int hash_size, uint8_t * pad,
-		      unsigned auth_cipher, uint16_t blocksize)
+		      unsigned auth_cipher,
+		      unsigned etm,
+		      uint16_t blocksize)
 {
 	/* pad is the LH pad the user wants us to add. Besides
 	 * this LH pad, we only add minimal padding
 	 */
-	unsigned int pre_length = data_size + hash_size + *pad;
+	unsigned int pre_length = data_size + *pad;
 	unsigned int length, new_pad;
+
+	if (etm == 0)
+		pre_length += hash_size;
 
 	new_pad = (uint8_t) (blocksize - (pre_length % blocksize)) + *pad;
 
@@ -242,14 +247,15 @@ calc_enc_length_stream(gnutls_session_t session, int data_size,
 	return length;
 }
 
-#define MAX_PREAMBLE_SIZE 16
+#define MAX_PREAMBLE_SIZE (16)
 
 /* generates the authentication data (data to be hashed only
  * and are not to be sent). Returns their size.
  */
 static inline int
 make_preamble(uint8_t * uint64_data, uint8_t type, unsigned int length,
-	      const version_entry_st * ver, uint8_t * preamble)
+	      const version_entry_st * ver,
+	      uint8_t *preamble)
 {
 	uint8_t *p = preamble;
 	uint16_t c_length;
@@ -268,6 +274,7 @@ make_preamble(uint8_t * uint64_data, uint8_t type, unsigned int length,
 	}
 	memcpy(p, &c_length, 2);
 	p += 2;
+
 	return p - preamble;
 }
 
@@ -292,7 +299,7 @@ compressed_to_ciphertext(gnutls_session_t session,
 	    _gnutls_auth_cipher_tag_len(&params->write.cipher_state);
 	int blocksize = _gnutls_cipher_get_block_size(params->cipher);
 	unsigned block_algo = _gnutls_cipher_is_block(params->cipher);
-	uint8_t *data_ptr;
+	uint8_t *data_ptr, *full_cipher_ptr;
 	const version_entry_st *ver = get_version(session);
 	int explicit_iv = _gnutls_version_has_explicit_iv(ver);
 	int auth_cipher =
@@ -311,11 +318,6 @@ compressed_to_ciphertext(gnutls_session_t session,
 			 _gnutls_mac_get_name(params->mac),
 			 (unsigned int) params->epoch);
 
-	preamble_size =
-	    make_preamble(UINT64DATA
-			  (params->write.sequence_number),
-			  type, compressed->size, ver, preamble);
-
 	/* Calculate the encrypted length (padding etc.)
 	 */
 	if (block_algo == CIPHER_BLOCK) {
@@ -330,14 +332,14 @@ compressed_to_ciphertext(gnutls_session_t session,
 		length =
 		    calc_enc_length_block(session, ver, compressed->size,
 					  tag_size, &pad, auth_cipher,
-					  blocksize);
+					  params->etm, blocksize);
+
 	} else {
 		pad = 0;
 		length =
 		    calc_enc_length_stream(session, compressed->size,
 					   tag_size, auth_cipher, exp_iv_size);
 	}
-
 	if (length < 0)
 		return gnutls_assert_val(length);
 
@@ -347,9 +349,9 @@ compressed_to_ciphertext(gnutls_session_t session,
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
 
 	data_ptr = cipher_data;
+	full_cipher_ptr = data_ptr;
 
 	if (explicit_iv) {	/* TLS 1.1 or later */
-
 		if (block_algo == CIPHER_BLOCK) {
 			/* copy the random IV.
 			 */
@@ -393,6 +395,16 @@ compressed_to_ciphertext(gnutls_session_t session,
 		}
 	}
 
+	if (params->etm) {
+		preamble_size = make_preamble(UINT64DATA(params->write.sequence_number),
+					  type, length, ver,
+					  preamble);
+	} else {
+		preamble_size = make_preamble(UINT64DATA(params->write.sequence_number),
+					  type, compressed->size, ver,
+					  preamble);
+ 	}
+
 	/* add the authenticate data */
 	ret =
 	    _gnutls_auth_cipher_add_auth(&params->write.cipher_state,
@@ -400,13 +412,22 @@ compressed_to_ciphertext(gnutls_session_t session,
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
+	if (params->etm && explicit_iv && block_algo == CIPHER_BLOCK) {
+		ret =
+		    _gnutls_auth_cipher_add_auth(&params->write.cipher_state,
+						 full_cipher_ptr, blocksize);
+		if (ret < 0)
+			return gnutls_assert_val(ret);
+	}
+
 	/* Actual encryption.
 	 */
 	ret =
 	    _gnutls_auth_cipher_encrypt2_tag(&params->write.cipher_state,
 					     compressed->data,
 					     compressed->size, cipher_data,
-					     cipher_size, pad);
+					     cipher_size, pad,
+					     params->etm);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
@@ -460,7 +481,7 @@ ciphertext_to_compressed(gnutls_session_t session,
 			 uint64 * sequence)
 {
 	uint8_t tag[MAX_HASH_SIZE];
-	const uint8_t *tag_ptr;
+	const uint8_t *tag_ptr = NULL;
 	unsigned int pad = 0, i;
 	int length, length_to_decrypt;
 	uint16_t blocksize;
@@ -468,12 +489,13 @@ ciphertext_to_compressed(gnutls_session_t session,
 	unsigned int tmp_pad_failed = 0;
 	unsigned int pad_failed = 0;
 	uint8_t preamble[MAX_PREAMBLE_SIZE];
-	unsigned int preamble_size;
+	unsigned int preamble_size = 0;
 	const version_entry_st *ver = get_version(session);
 	unsigned int tag_size =
 	    _gnutls_auth_cipher_tag_len(&params->read.cipher_state);
 	unsigned int explicit_iv = _gnutls_version_has_explicit_iv(ver);
 	unsigned imp_iv_size, exp_iv_size;
+	uint8_t nonce[MAX_CIPHER_BLOCK_SIZE];
 
 	if (unlikely(ver == NULL))
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
@@ -481,6 +503,45 @@ ciphertext_to_compressed(gnutls_session_t session,
 	imp_iv_size = _gnutls_cipher_get_implicit_iv_size(params->cipher);
 	exp_iv_size = _gnutls_cipher_get_explicit_iv_size(params->cipher);
 	blocksize = _gnutls_cipher_get_block_size(params->cipher);
+
+	if (params->etm != 0) { /* verify the MAC */
+		if (unlikely
+		    (ciphertext->size < tag_size))
+			return
+			    gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
+
+		preamble_size =
+		    make_preamble(UINT64DATA(*sequence),
+				  type,
+				  ciphertext->size,
+				  ver,
+				  preamble);
+
+		ret =
+		    _gnutls_auth_cipher_add_auth(&params->read.
+						 cipher_state, preamble,
+						 preamble_size);
+		if (unlikely(ret < 0))
+			return gnutls_assert_val(ret);
+
+		ret =
+		    _gnutls_auth_cipher_add_auth(&params->read.
+						 cipher_state,
+						 ciphertext->data, ciphertext->size-tag_size);
+		if (unlikely(ret < 0))
+			return gnutls_assert_val(ret);
+
+		ret =
+		    _gnutls_auth_cipher_tag(&params->read.cipher_state, tag,
+					    tag_size);
+		if (unlikely(ret < 0))
+			return gnutls_assert_val(ret);
+
+		if (unlikely(memcmp(tag, &ciphertext->data[ciphertext->size-tag_size], tag_size) != 0)) {
+			/* HMAC was not the same. */
+			return gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
+		}
+	}
 
 	/* actual decryption (inplace)
 	 */
@@ -492,7 +553,6 @@ ciphertext_to_compressed(gnutls_session_t session,
 		if (explicit_iv
 		    && _gnutls_auth_cipher_is_aead(&params->read.
 						   cipher_state)) {
-			uint8_t nonce[MAX_CIPHER_BLOCK_SIZE];
 			/* Values in AEAD are pretty fixed in TLS 1.2 for 128-bit block
 			 */
 			if (unlikely
@@ -516,8 +576,7 @@ ciphertext_to_compressed(gnutls_session_t session,
 
 			_gnutls_auth_cipher_setiv(&params->read.
 						  cipher_state, nonce,
-						  exp_iv_size +
-						  imp_iv_size);
+						  exp_iv_size + imp_iv_size);
 
 			ciphertext->data += exp_iv_size;
 			ciphertext->size -= exp_iv_size;
@@ -536,19 +595,18 @@ ciphertext_to_compressed(gnutls_session_t session,
 			tag_ptr = compressed->data + length;
 		}
 
-		/* Pass the type, version, length and compressed through
-		 * MAC.
-		 */
-		preamble_size =
-		    make_preamble(UINT64DATA(*sequence), type,
-				  length, ver, preamble);
+		if (params->etm == 0) {
+			preamble_size =
+			    make_preamble(UINT64DATA(*sequence), type,
+					  length, ver, preamble);
 
-		ret =
-		    _gnutls_auth_cipher_add_auth(&params->read.
-						 cipher_state, preamble,
-						 preamble_size);
-		if (unlikely(ret < 0))
-			return gnutls_assert_val(ret);
+			ret =
+			    _gnutls_auth_cipher_add_auth(&params->read.
+							 cipher_state, preamble,
+							 preamble_size);
+			if (unlikely(ret < 0))
+				return gnutls_assert_val(ret);
+		}
 
 		if (unlikely
 		    ((unsigned) length_to_decrypt > compressed->size)) {
@@ -566,19 +624,26 @@ ciphertext_to_compressed(gnutls_session_t session,
 						 ciphertext->data,
 						 length_to_decrypt,
 						 compressed->data,
-						 compressed->size);
+						 compressed->size,
+						 params->etm);
 
 		if (unlikely(ret < 0))
 			return gnutls_assert_val(ret);
 
 		break;
 	case CIPHER_BLOCK:
-		if (unlikely
-		    (ciphertext->size < blocksize
-		     || (ciphertext->size % blocksize != 0)))
+		if (unlikely(ciphertext->size < blocksize))
 			return
 			    gnutls_assert_val
 			    (GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
+
+		if (params->etm == 0) {
+			if (unlikely(ciphertext->size % blocksize != 0))
+				return gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
+		} else {
+			if (unlikely((ciphertext->size - tag_size) % blocksize != 0))
+				return gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
+		}
 
 		/* ignore the IV in TLS 1.1+
 		 */
@@ -588,6 +653,7 @@ ciphertext_to_compressed(gnutls_session_t session,
 						  ciphertext->data,
 						  blocksize);
 
+			memcpy(nonce, ciphertext->data, blocksize);
 			ciphertext->size -= blocksize;
 			ciphertext->data += blocksize;
 		}
@@ -605,88 +671,109 @@ ciphertext_to_compressed(gnutls_session_t session,
 			return
 			    gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
 
-		ret =
-		    _gnutls_cipher_decrypt2(&params->read.cipher_state.
-					    cipher, ciphertext->data,
-					    ciphertext->size,
-					    compressed->data,
-					    compressed->size);
-		if (unlikely(ret < 0))
-			return gnutls_assert_val(ret);
 
-		pad = compressed->data[ciphertext->size - 1];	/* pad */
+		if (params->etm == 0) {
+			ret =
+			    _gnutls_cipher_decrypt2(&params->read.cipher_state.
+						    cipher, ciphertext->data,
+						    ciphertext->size,
+						    compressed->data,
+						    compressed->size);
+			if (unlikely(ret < 0))
+				return gnutls_assert_val(ret);
 
-		/* Check the pading bytes (TLS 1.x). 
-		 * Note that we access all 256 bytes of ciphertext for padding check
-		 * because there is a timing channel in that memory access (in certain CPUs).
-		 */
-		if (ver->id != GNUTLS_SSL3)
-			for (i = 2; i <= MIN(256, ciphertext->size); i++) {
-				tmp_pad_failed |=
-				    (compressed->
-				     data[ciphertext->size - i] != pad);
-				pad_failed |=
-				    ((i <= (1 + pad)) & (tmp_pad_failed));
+			pad = compressed->data[ciphertext->size - 1];	/* pad */
+			length = ciphertext->size - tag_size - pad - 1;
+
+			/* Check the pading bytes (TLS 1.x). 
+			 * Note that we access all 256 bytes of ciphertext for padding check
+			 * because there is a timing channel in that memory access (in certain CPUs).
+			 */
+			if (ver->id != GNUTLS_SSL3)
+				for (i = 2; i <= MIN(256, ciphertext->size); i++) {
+					tmp_pad_failed |=
+					    (compressed->
+					     data[ciphertext->size - i] != pad);
+					pad_failed |=
+					    ((i <= (1 + pad)) & (tmp_pad_failed));
+				}
+
+			if (unlikely
+			    (pad_failed != 0
+			     || (1 + pad > ((int) ciphertext->size - tag_size)))) {
+				/* We do not fail here. We check below for the
+				 * the pad_failed. If zero means success.
+				 */
+				pad_failed = 1;
+				pad = 0;
 			}
 
-		if (unlikely
-		    (pad_failed != 0
-		     || (1 + pad > ((int) ciphertext->size - tag_size)))) {
-			/* We do not fail here. We check below for the
-			 * the pad_failed. If zero means success.
+			tag_ptr = &compressed->data[length];
+
+			preamble_size =
+			    make_preamble(UINT64DATA(*sequence), type,
+					  length, ver, preamble);
+
+			ret =
+			    _gnutls_auth_cipher_add_auth(&params->read.
+							 cipher_state, preamble,
+							 preamble_size);
+			if (unlikely(ret < 0))
+				return gnutls_assert_val(ret);
+
+			ret =
+			    _gnutls_auth_cipher_add_auth(&params->read.
+							 cipher_state,
+							 compressed->data, length);
+			if (unlikely(ret < 0))
+				return gnutls_assert_val(ret);
+
+			/* Pass the type, version, length and compressed through
+			 * MAC.
 			 */
-			pad_failed = 1;
-			pad = 0;
+		} else { /* etm != 0 */
+			ret =
+			    _gnutls_cipher_decrypt2(&params->read.cipher_state.
+						    cipher, ciphertext->data,
+						    ciphertext->size - tag_size,
+						    compressed->data,
+						    compressed->size);
+			if (unlikely(ret < 0))
+				return gnutls_assert_val(ret);
+
+			pad = compressed->data[ciphertext->size - tag_size - 1]; /* pad */
+			length = ciphertext->size - tag_size - pad - 1;
+
+			if (length < 0)
+				return gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
 		}
-
-		length = ciphertext->size - tag_size - pad - 1;
-		tag_ptr = &compressed->data[length];
-
-		/* Pass the type, version, length and compressed through
-		 * MAC.
-		 */
-		preamble_size =
-		    make_preamble(UINT64DATA(*sequence), type,
-				  length, ver, preamble);
-
-		ret =
-		    _gnutls_auth_cipher_add_auth(&params->read.
-						 cipher_state, preamble,
-						 preamble_size);
-		if (unlikely(ret < 0))
-			return gnutls_assert_val(ret);
-
-		ret =
-		    _gnutls_auth_cipher_add_auth(&params->read.
-						 cipher_state,
-						 compressed->data, length);
-		if (unlikely(ret < 0))
-			return gnutls_assert_val(ret);
 
 		break;
 	default:
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
 	}
 
-	ret =
-	    _gnutls_auth_cipher_tag(&params->read.cipher_state, tag,
-				    tag_size);
-	if (unlikely(ret < 0))
-		return gnutls_assert_val(ret);
+	if (params->etm == 0) {
+		ret =
+		    _gnutls_auth_cipher_tag(&params->read.cipher_state, tag,
+					    tag_size);
+		if (unlikely(ret < 0))
+			return gnutls_assert_val(ret);
 
-	/* Here there could be a timing leakage in CBC ciphersuites that
-	 * could be exploited if the cost of a successful memcmp is high. 
-	 * A constant time memcmp would help there, but it is not easy to maintain
-	 * against compiler optimizations. Currently we rely on the fact that
-	 * a memcmp comparison is negligible over the crypto operations.
-	 */
-	if (unlikely
-	    (memcmp(tag, tag_ptr, tag_size) != 0 || pad_failed != 0)) {
-		/* HMAC was not the same. */
-		dummy_wait(params, compressed, pad_failed, pad,
-			   length + preamble_size);
+		/* Here there could be a timing leakage in CBC ciphersuites that
+		 * could be exploited if the cost of a successful memcmp is high. 
+		 * A constant time memcmp would help there, but it is not easy to maintain
+		 * against compiler optimizations. Currently we rely on the fact that
+		 * a memcmp comparison is negligible over the crypto operations.
+		 */
+		if (unlikely
+		    (memcmp(tag, tag_ptr, tag_size) != 0 || pad_failed != 0)) {
+			/* HMAC was not the same. */
+			dummy_wait(params, compressed, pad_failed, pad,
+				   length + preamble_size);
 
-		return gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
+			return gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
+		}
 	}
 
 	return length;

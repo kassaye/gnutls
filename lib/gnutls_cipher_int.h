@@ -151,10 +151,10 @@ int _gnutls_auth_cipher_add_auth(auth_cipher_hd_st * handle,
 int _gnutls_auth_cipher_encrypt2_tag(auth_cipher_hd_st * handle,
 				     const uint8_t * text, int textlen,
 				     void *ciphertext, int ciphertextlen,
-				     int pad_size);
+				     int pad_size, unsigned etm);
 int _gnutls_auth_cipher_decrypt2(auth_cipher_hd_st * handle,
 				 const void *ciphertext, int ciphertextlen,
-				 void *text, int textlen);
+				 void *text, int textlen, unsigned etm);
 int _gnutls_auth_cipher_tag(auth_cipher_hd_st * handle, void *tag,
 			    int tag_size);
 
